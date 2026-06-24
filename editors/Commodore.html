@@ -69,6 +69,8 @@ button.block.cur{background:#0e639c}
   <button class="sec" onclick="exportBlock()">Export Set (.bin)</button>
   <div class="sep"></div>
   <button class="sec" onclick="importBlock()">Import Set (.bin)</button>
+  <div class="sep"></div>
+  <button class="sec" onclick="syncReverseSet()">Copy+Invert $80-FF</button>
   <span class="copystat" id="copystat">Copied!</span>
   <span id="status"></span>
 </div>
@@ -422,6 +424,20 @@ function updateStatus(){
   for(let i=0;i<NUM_CHARS;i++)if(hasData(i))count++;
   const fileLabel=romFileName?` | File: ${romFileName}`:'';
   document.getElementById('status').textContent=`${count}/${NUM_CHARS} glyphs with data in set ${curBlock} | Selected: $${sel.toString(16).toUpperCase().padStart(2,'0')}${fileLabel}`;
+}
+
+function syncReverseSet(){
+  if(!confirm('Copy $00-$7F to $80-$FF (inverted) in block '+curBlock+'?\nThis cannot be undone.'))return;
+  const blockOff=curBlock*BLOCK_SIZE;
+  for(let addr=0;addr<128;addr++){
+    const src=blockOff+addr*CHAR_ROWS;
+    const dst=blockOff+(addr+0x80)*CHAR_ROWS;
+    for(let r=0;r<CHAR_ROWS;r++)romBytes[dst+r]=(~romBytes[src+r])&0xFF;
+  }
+  buildCharMap();
+  selectChar(sel);
+  renderPreview();
+  updateStatus();
 }
 
 function clearGlyph(){
