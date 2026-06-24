@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TRS-80 Character ROM Editor</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1e1e1e;color:#d4d4d4;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;overflow:hidden;height:100vh}
+#toolbar{display:flex;align-items:center;gap:6px;padding:6px 10px;background:#252526;border-bottom:1px solid #3e3e3e;flex-wrap:wrap}
+button{background:#0e639c;color:#fff;border:none;padding:5px 12px;cursor:pointer;font-size:11px;border-radius:3px;white-space:nowrap}
+button:hover{background:#1177bb}
+button.sec{background:#3a3a3a}
+button.sec:hover{background:#4a4a4a}
+button.warn{background:#6a3a1a}
+button.warn:hover{background:#8a4a2a}
+button.tiny{font-size:9px;padding:3px 6px}
+button.block{background:#3a3a3a;margin-bottom:2px}
+button.block.cur{background:#0e639c}
+.sep{width:1px;height:22px;background:#3e3e3e;margin:0 2px}
+#status{margin-left:auto;color:#888;font-size:11px}
+#main{display:flex;height:calc(100vh - 38px)}
+#sidebar{width:320px;min-width:320px;background:#252526;border-right:1px solid #3e3e3e;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;padding:8px}
+#sidebar h3{margin:10px 0 6px;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px}
+#sidebar h3:first-child{margin-top:0}
+#fileinfo{font-size:11px;color:#9cdcfe;line-height:1.5;word-break:break-all}
+#warn1k{font-size:11px;color:#e9c46a;background:#2a2000;border:1px solid #665500;padding:4px 6px;border-radius:2px;margin-top:6px;display:none}
+#warn1k.show{display:block}
+#blockrow{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+.fmtrow{display:flex;gap:10px;align-items:center;margin-top:6px;font-size:11px;flex-wrap:wrap}
+.fmtrow select{background:#1e1e1e;color:#d4d4d4;border:1px solid #3e3e3e;font-size:11px}
+.fmtrow.presets{gap:4px}
+.cg{display:grid;grid-template-columns:repeat(16,1fr);gap:2px;justify-content:start}
+.cc{display:flex;align-items:center;justify-content:center;cursor:pointer;background:#1a1a1a}
+.cc:hover{outline:1px solid #0e639c}
+.cc.sel{outline:2px solid #0078d4;background:#094771}
+.cc.data{background:#1a2a1a}
+.cc.data.sel{background:#094771}
+.cc canvas{image-rendering:pixelated;display:block}
+#edpan{flex:1;display:flex;flex-direction:column;align-items:center;padding:12px;overflow-y:auto;min-width:360px}
+.ehdr{display:flex;flex-direction:column;align-items:center;margin-bottom:8px}
+.ehdr .ch{font-size:28px;font-weight:bold;color:#4ec9b0}
+.ehdr .info{color:#888;font-size:12px;margin-top:2px;text-align:center}
+#pgrid{display:grid;gap:1px;background:#444;border:2px solid #444;margin-top:8px}
+.px{width:40px;height:34px;background:#2a2a2a;cursor:crosshair;transition:background .05s}
+.px.on{background:#4ec9b0}
+.px:hover{outline:2px solid #fff;outline-offset:-2px}
+.hxd{margin-top:10px;font-family:'Consolas','Courier New',monospace;font-size:12px;color:#9cdcfe;text-align:left;line-height:1.7;white-space:pre}
+.hxd .rl{color:#555}
+.hxd .rv{color:#9cdcfe}
+.hxd .rb{color:#666}
+#prevpan{width:660px;min-width:660px;background:#252526;border-left:1px solid #3e3e3e;display:flex;flex-direction:column;padding:6px;overflow-y:auto}
+#prevpan h3{margin-bottom:4px;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px}
+.colmode{display:flex;gap:4px;margin-bottom:6px}
+.coltoggle.cur{background:#0e639c}
+#ptext{background:#1e1e1e;color:#d4d4d4;border:1px solid #3e3e3e;font-family:'Consolas',monospace;font-size:11px;padding:4px;resize:vertical;margin-bottom:4px}
+#pcanvas{border:1px solid #3e3e3e;background:#000;display:block;image-rendering:pixelated}
+.copystat{font-size:11px;color:#4ec9b0;padding:2px 6px;background:#1a2a2a;border-radius:2px;display:none}
+.copystat.show{display:inline}
+.note{font-size:11px;color:#fff;margin-top:10px;text-align:left;line-height:1.6}
+.note p{margin-bottom:8px}
+.note p:last-child{margin-bottom:0}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <button onclick="loadRom()">Load ROM (.bin)</button>
+  <button onclick="saveRom()">Save ROM (.bin)</button>
+  <div class="sep"></div>
+  <button class="sec" onclick="exportC()">Export C</button>
+  <button class="sec" onclick="exportPNG()">Export PNG</button>
+  <span class="copystat" id="copystat">Copied!</span>
+  <span id="status"></span>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <h3>Model</h3>
+    <select id="modelSel" style="width:100%;background:#1e1e1e;color:#d4d4d4;border:1px solid #3e3e3e;font-size:11px;padding:3px" onchange="onModelChange()">
+      <option value="std">Standard (Model I / III / 4)</option>
+      <option value="m2">Model II / DT1 (stride-16, 128 chars)</option>
+    </select>
+    <h3>ROM Format</h3>
+    <div id="fileinfo">No file loaded (blank buffer)</div>
+    <div id="warn1k">1K ROM loaded. Upper 128 chars are blank. Saves as 1K unless you edit any upper chars.</div>
+    <div id="blockrow"></div>
+    <div class="fmtrow">
+      <label>Bit shift
+        <select id="fmtShift" onchange="onFormatChange()">
+          <option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option>
+        </select>
+      </label>
+      <label>Width
+        <select id="fmtWidth" onchange="onWidthChange()">
+          <option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option>
+        </select>
+      </label>
+      <label>Height
+        <select id="fmtRows" onchange="onRowsChange()">
+          <option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+          <option value="11">11</option><option value="12">12</option>
+        </select>
+      </label>
+    </div>
+    <div class="fmtrow">
+      <label><input type="checkbox" id="fmtMirror" onchange="onFormatChange()"> Mirror columns</label>
+      <label><input type="checkbox" id="fmtInvert" onchange="onFormatChange()"> Invert bits</label>
+    </div>
+    <h3 id="charGridHdr">Characters ($00-$FF)</h3>
+    <div class="cg" id="chargrid"></div>
+    <div class="note">
+      <p>Model I (1K): 128 chars, 8 bytes each, 5 bits wide (bits 4-0). Model III/4 (2K): 256 chars, 8 bytes each, 8 bits wide. Both use direct ASCII addressing ($20=space, $41=A).</p>
+      <p>Model II: 128 chars, stride-16 (16 bytes/char), 8 bits wide, 10 active rows. DT1 also uses stride-16 but with fewer active rows; adjust Height to match.</p>
+      <p>1K files are padded to 2K for editing. Save writes 1K unless any upper-128 chars are changed, which triggers a 2K save.</p>
+    </div>
+  </div>
+
+  <div id="edpan">
+    <div class="ehdr">
+      <div class="ch" id="edchar">$41</div>
+      <div class="info" id="edinfo"></div>
+    </div>
+    <div id="pgrid"></div>
+    <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;width:100%;max-width:360px">
+      <div style="display:flex;gap:4px">
+        <button style="flex:1" class="sec" onclick="undo()">Undo</button>
+        <button style="flex:1" class="warn" onclick="clearGlyph()">Clear</button>
+        <button style="flex:1" class="sec" onclick="copyGlyph()">Copy Glyph</button>
+        <button style="flex:1" class="sec" onclick="pasteGlyph()">Paste Glyph</button>
+        <button style="flex:1" class="sec" onclick="invertGlyph()">Invert</button>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button style="flex:1" class="sec" onclick="rotateGlyphLeft()">← Rot L</button>
+        <button style="flex:1" class="sec" onclick="rotateGlyphRight()">→ Rot R</button>
+        <button style="flex:1" class="sec" onclick="rotateGlyphUp()">↑ Rot Up</button>
+        <button style="flex:1" class="sec" onclick="rotateGlyphDown()">↓ Rot Dn</button>
+      </div>
+    </div>
+    <div class="hxd" id="hexdisp"></div>
+  </div>
+
+  <div id="prevpan">
+    <h3>Live Preview (ASCII)</h3>
+    <div class="colmode">
+      <button id="col40btn" class="sec tiny coltoggle" onclick="setPreviewCols(40)">40 Column</button>
+      <button id="col80btn" class="sec tiny coltoggle cur" onclick="setPreviewCols(80)">80 Column</button>
+    </div>
+    <textarea id="ptext" rows="10" spellcheck="false"></textarea>
+    <canvas id="pcanvas"></canvas>
+  </div>
+</div>
+
+<input type="file" id="fileinput" accept=".bin,.rom,.z25,.z29" style="display:none">
+
+<script>
+// TRS-80 Character ROM Editor
+// Standard: stride=8, 128 chars (1K) or 256 chars (2K), 5-bit (Mod I) or 7-bit (Mod III/4)
+// Model II: stride=16, 128 chars, 8-bit wide, 10 active rows
+
+let CHAR_STRIDE=8, NUM_CHARS=256;
+let modelType='std';
+let file1K=false, upperDirty=false;
+let previewCols=80;
+const MAX_PREVIEW_LINES=200;
+
+let romBytes=new Uint8Array(256*8);
+let numBlocks=1, curBlock=0;
+let sel=0x41;
+let clipboard=null;
+let isDrawing=false, drawVal=1;
+let undoStack=[];
+const MAX_UNDO=50;
+let romFileHandle=null, romFileName=null;
+const hasFSAccess='showOpenFilePicker' in window;
+
+let fmtShift=0, fmtWidth=8, fmtRows=8, fmtMirror=false, fmtInvert=false;
+
+function blockBytes(){return NUM_CHARS*CHAR_STRIDE;}
+
+function charOffset(block,addr){return block*blockBytes()+addr*CHAR_STRIDE;}
+
+function getPixel(block,addr,r,c){
+  const off=charOffset(block,addr)+r;
+  const byte=romBytes[off]||0;
+  const v=fmtInvert?(~byte&0xFF):byte;
+  const bitInV=fmtMirror?c:(fmtWidth-1-c);
+  return (v>>(fmtShift+bitInV))&1;
+}
+
+function setPixel(block,addr,r,c,on){
+  if(file1K&&addr>=128)upperDirty=true;
+  const off=charOffset(block,addr)+r;
+  const bitInV=fmtMirror?c:(fmtWidth-1-c);
+  const bitPos=fmtShift+bitInV;
+  const desired=fmtInvert?(on?0:1):(on?1:0);
+  let byte=romBytes[off]||0;
+  if(desired)byte|=(1<<bitPos); else byte&=~(1<<bitPos);
+  romBytes[off]=byte&0xFF;
+}
+
+function hasData(addr){
+  for(let r=0;r<fmtRows;r++)for(let c=0;c<fmtWidth;c++)if(getPixel(curBlock,addr,r,c))return true;
+  return false;
+}
+
+function saveUndo(block,addr){
+  const off=charOffset(block,addr);
+  undoStack.push({block,addr,bytes:romBytes.slice(off,off+CHAR_STRIDE)});
+  if(undoStack.length>MAX_UNDO)undoStack.shift();
+}
+
+function undo(){
+  if(undoStack.length===0)return;
+  const state=undoStack.pop();
+  const off=charOffset(state.block,state.addr);
+  romBytes.set(state.bytes,off);
+  if(state.block!==curBlock){curBlock=state.block;rebuildBlockRow();}
+  selectChar(state.addr);
+  buildCharMap();
+  renderPreview();
+}
+
+function syncFmtControls(){
+  document.getElementById('fmtShift').value=fmtShift;
+  document.getElementById('fmtWidth').value=fmtWidth;
+  document.getElementById('fmtRows').value=fmtRows;
+  document.getElementById('fmtMirror').checked=fmtMirror;
+  document.getElementById('fmtInvert').checked=fmtInvert;
+}
+
+function onModelChange(){
+  const newModel=document.getElementById('modelSel').value;
+  if(newModel===modelType)return;
+  modelType=newModel;
+  if(modelType==='std'){
+    CHAR_STRIDE=8; NUM_CHARS=256;
+    fmtShift=0; fmtWidth=8; fmtRows=8; fmtMirror=false; fmtInvert=false;
+  }else{
+    CHAR_STRIDE=16; NUM_CHARS=128;
+    fmtShift=0; fmtWidth=8; fmtRows=10; fmtMirror=false; fmtInvert=false;
+  }
+  syncFmtControls();
+  // Resize buffer to fit new block size while preserving raw bytes
+  const bsz=blockBytes();
+  const needed=Math.max(bsz,Math.ceil(romBytes.length/bsz)*bsz);
+  if(romBytes.length!==needed){
+    const nb=new Uint8Array(needed);
+    nb.set(romBytes.subarray(0,Math.min(romBytes.length,needed)));
+    romBytes=nb;
+  }
+  numBlocks=Math.max(1,romBytes.length/bsz);
+  curBlock=0;
+  document.getElementById('charGridHdr').textContent=
+    `Characters ($00-$${(NUM_CHARS-1).toString(16).toUpperCase().padStart(2,'0')})`;
+  rebuildBlockRow();
+  buildCharMap();
+  buildGrid();
+  selectChar(sel<NUM_CHARS?sel:0x41);
+  renderPreview();
+  updateStatus();
+}
+
+function applyPreset(shift,width,rows){
+  fmtShift=shift; fmtWidth=width; fmtRows=rows;
+  fmtMirror=false; fmtInvert=false;
+  syncFmtControls();
+  buildGrid();
+  buildCharMap();
+  selectChar(sel);
+  renderPreview();
+}
+
+function onFormatChange(){
+  fmtShift=parseInt(document.getElementById('fmtShift').value);
+  fmtMirror=document.getElementById('fmtMirror').checked;
+  fmtInvert=document.getElementById('fmtInvert').checked;
+  buildCharMap();
+  refreshGrid();
+  renderPreview();
+}
+
+function onWidthChange(){
+  fmtWidth=parseInt(document.getElementById('fmtWidth').value);
+  buildGrid();
+  buildCharMap();
+  refreshGrid();
+  renderPreview();
+}
+
+function onRowsChange(){
+  fmtRows=parseInt(document.getElementById('fmtRows').value);
+  buildGrid();
+  buildCharMap();
+  refreshGrid();
+  renderPreview();
+}
+
+function rebuildBlockRow(){
+  numBlocks=Math.max(1,Math.ceil(romBytes.length/blockBytes()));
+  const row=document.getElementById('blockrow');
+  row.innerHTML='';
+  if(numBlocks<=1)return;
+  for(let b=0;b<numBlocks;b++){
+    const btn=document.createElement('button');
+    btn.className='block'+(b===curBlock?' cur':'');
+    const startAddr=(b*blockBytes()).toString(16).toUpperCase().padStart(4,'0');
+    btn.textContent=`Block ${b} ($${startAddr})`;
+    btn.onclick=(bi=>()=>{curBlock=bi;rebuildBlockRow();buildCharMap();selectChar(sel);renderPreview();})(b);
+    row.appendChild(btn);
+  }
+}
+
+const CHARGRID_COLS=16, CHARGRID_GAP=2, SIDEBAR_INNER=320-16;
+let miniScale=2;
+
+function computeMiniScale(){
+  const avail=SIDEBAR_INNER-(CHARGRID_COLS-1)*CHARGRID_GAP;
+  miniScale=Math.max(1,Math.floor((avail/CHARGRID_COLS)/fmtWidth));
+}
+
+function buildCharMap(){
+  computeMiniScale();
+  const g=document.getElementById('chargrid');
+  g.innerHTML='';
+  for(let addr=0;addr<NUM_CHARS;addr++){
+    const d=document.createElement('div');
+    d.className='cc'+(hasData(addr)?' data':'');
+    d.id='cc'+addr;
+    d.title='$'+addr.toString(16).toUpperCase().padStart(2,'0');
+    d.onclick=(a=>()=>selectChar(a))(addr);
+    const cv=document.createElement('canvas');
+    cv.width=fmtWidth*miniScale;
+    cv.height=fmtRows*miniScale;
+    d.appendChild(cv);
+    g.appendChild(d);
+    drawMiniGlyph(cv,addr);
+  }
+}
+
+function drawMiniGlyph(cv,addr){
+  const ctx=cv.getContext('2d');
+  ctx.imageSmoothingEnabled=false;
+  ctx.fillStyle='#1e1e1e';
+  ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#4ec9b0';
+  for(let r=0;r<fmtRows;r++)
+    for(let c=0;c<fmtWidth;c++)
+      if(getPixel(curBlock,addr,r,c))
+        ctx.fillRect(c*miniScale,r*miniScale,miniScale,miniScale);
+}
+
+function buildGrid(){
+  const g=document.getElementById('pgrid');
+  g.style.gridTemplateColumns=`repeat(${fmtWidth},40px)`;
+  g.style.gridTemplateRows=`repeat(${fmtRows},34px)`;
+  g.innerHTML='';
+  for(let r=0;r<fmtRows;r++){
+    for(let c=0;c<fmtWidth;c++){
+      const px=document.createElement('div');
+      px.className='px';
+      px.addEventListener('mousedown',(e)=>{
+        e.preventDefault();
+        isDrawing=true;
+        if(e.button===0)drawVal=getPixel(curBlock,sel,r,c)?0:1;
+        else if(e.button===2)drawVal=0;
+        saveUndo(curBlock,sel);
+        setPixel(curBlock,sel,r,c,drawVal);
+        afterEdit();
+      });
+      px.addEventListener('mouseenter',()=>{
+        if(isDrawing){setPixel(curBlock,sel,r,c,drawVal);afterEdit();}
+      });
+      px.addEventListener('contextmenu',(e)=>e.preventDefault());
+      g.appendChild(px);
+    }
+  }
+}
+
+function afterEdit(){
+  refreshGrid();
+  updateMiniGlyph(sel);
+  renderPreview();
+  updateStatus();
+}
+
+function refreshGrid(){
+  const pxs=document.getElementById('pgrid').children;
+  for(let r=0;r<fmtRows;r++)
+    for(let c=0;c<fmtWidth;c++){
+      const idx=r*fmtWidth+c;
+      if(getPixel(curBlock,sel,r,c))pxs[idx].classList.add('on');
+      else pxs[idx].classList.remove('on');
+    }
+  updateHexDisplay();
+}
+
+function updateHexDisplay(){
+  const el=document.getElementById('hexdisp');
+  const off=charOffset(curBlock,sel);
+  let html='';
+  for(let r=0;r<fmtRows;r++){
+    let bits='';
+    for(let c=0;c<fmtWidth;c++)bits+=getPixel(curBlock,sel,r,c)?'#':'.';
+    const raw=romBytes[off+r]||0;
+    const hex=raw.toString(16).padStart(2,'0').toUpperCase();
+    html+=`<span class="rl">${String(r).padStart(2,'0')}</span>  <span class="rv">0x${hex}</span>  <span class="rb">${bits}</span>\n`;
+  }
+  el.innerHTML=html;
+}
+
+function updateMiniGlyph(addr){
+  const el=document.getElementById('cc'+addr);
+  if(!el)return;
+  const cv=el.querySelector('canvas');
+  if(cv)drawMiniGlyph(cv,addr);
+  if(hasData(addr))el.classList.add('data');
+  else el.classList.remove('data');
+}
+
+function selectChar(addr){
+  const old=document.querySelector('.cc.sel');
+  if(old)old.classList.remove('sel');
+  sel=addr;
+  const el=document.getElementById('cc'+addr);
+  if(el){el.classList.add('sel');el.scrollIntoView({block:'nearest'});}
+  document.getElementById('edchar').textContent='$'+addr.toString(16).toUpperCase().padStart(2,'0');
+  const off=charOffset(curBlock,addr);
+  const blkStart=(curBlock*blockBytes()).toString(16).toUpperCase().padStart(4,'0');
+  const blkEnd=(curBlock*blockBytes()+blockBytes()-1).toString(16).toUpperCase().padStart(4,'0');
+  let info=`Block ${curBlock} ($${blkStart}-$${blkEnd}) | file offset $${off.toString(16).toUpperCase().padStart(4,'0')}`;
+  if(addr>=0x20&&addr<=0x7E)info+=` | '${String.fromCharCode(addr)}'`;
+  document.getElementById('edinfo').textContent=info;
+  refreshGrid();
+  updateStatus();
+}
+
+function updateStatus(){
+  let count=0;
+  for(let i=0;i<NUM_CHARS;i++)if(hasData(i))count++;
+  const fileLabel=romFileName?` | ${romFileName}`:'';
+  const saveHint=file1K?(upperDirty?' | will save 2K':' | will save 1K'):'';
+  document.getElementById('status').textContent=
+    `${count}/${NUM_CHARS} glyphs in block ${curBlock} | $${sel.toString(16).toUpperCase().padStart(2,'0')}${fileLabel}${saveHint}`;
+}
+
+function clearGlyph(){
+  saveUndo(curBlock,sel);
+  for(let r=0;r<fmtRows;r++)for(let c=0;c<fmtWidth;c++)setPixel(curBlock,sel,r,c,0);
+  afterEdit();
+}
+
+function transformGlyph(fn){
+  const W=fmtWidth,H=fmtRows;
+  const s=[];
+  for(let r=0;r<H;r++){s.push([]);for(let c=0;c<W;c++)s[r].push(getPixel(curBlock,sel,r,c));}
+  saveUndo(curBlock,sel);
+  for(let r=0;r<H;r++)for(let c=0;c<W;c++)setPixel(curBlock,sel,r,c,fn(s,r,c,W,H));
+  afterEdit();
+}
+function invertGlyph(){transformGlyph((s,r,c)=>s[r][c]?0:1);}
+function rotateGlyphLeft(){transformGlyph((s,r,c,W)=>s[r][(c+1)%W]);}
+function rotateGlyphRight(){transformGlyph((s,r,c,W)=>s[r][(c-1+W)%W]);}
+function rotateGlyphUp(){transformGlyph((s,r,c,W,H)=>s[(r+1)%H][c]);}
+function rotateGlyphDown(){transformGlyph((s,r,c,W,H)=>s[(r-1+H)%H][c]);}
+
+const GLYPH_CLIP_TYPE='rom-glyph-v1';
+
+function copyGlyph(){
+  const rows=[];
+  for(let r=0;r<fmtRows;r++){
+    const row=[];
+    for(let c=0;c<fmtWidth;c++)row.push(getPixel(curBlock,sel,r,c));
+    rows.push(row);
+  }
+  const data={type:GLYPH_CLIP_TYPE,w:fmtWidth,h:fmtRows,rows};
+  clipboard=data;
+  if(navigator.clipboard)navigator.clipboard.writeText(JSON.stringify(data)).catch(()=>{});
+  const s=document.getElementById('copystat');
+  s.classList.add('show');
+  setTimeout(()=>s.classList.remove('show'),1500);
+}
+
+async function pasteGlyph(){
+  let data=clipboard;
+  if(navigator.clipboard){
+    try{
+      const text=await navigator.clipboard.readText();
+      const parsed=JSON.parse(text);
+      if(parsed&&parsed.type===GLYPH_CLIP_TYPE)data=parsed;
+    }catch(e){}
+  }
+  if(!data)return;
+  let r0=0;
+  if(data.h>fmtRows){while(r0<data.h&&data.rows[r0].every(p=>p===0))r0++;}
+  let c0=0;
+  if(data.w>fmtWidth){cloop:while(c0<data.w){for(let r=r0;r<data.h;r++)if(data.rows[r][c0])break cloop;c0++;}}
+  saveUndo(curBlock,sel);
+  for(let r=0;r<fmtRows;r++)
+    for(let c=0;c<fmtWidth;c++){
+      const sr=r+r0,sc=c+c0;
+      setPixel(curBlock,sel,r,c,(sr<data.h&&sc<data.w)?data.rows[sr][sc]:0);
+    }
+  afterEdit();
+}
+
+// TRS-80 uses direct ASCII addressing for $20-$7E
+// Non-ASCII ROM chars ($00-$1F, $7F-$FF) are mapped via PUA U+E000+addr
+const UNICODE_TO_TRS={};
+for(let c=0x20;c<=0x7E;c++)UNICODE_TO_TRS[c]=c;
+for(let c=0;c<256;c++){if(c<0x20||c>0x7E)UNICODE_TO_TRS[0xE000+c]=c;}
+
+function buildDefaultText(){
+  let t='THE QUICK BROWN FOX JUMPS\nOVER THE LAZY DOG!\n\nAdrian\'s Digital Basement\n\n';
+  // All glyphs $00-$FF, 16 per line
+  for(let base=0;base<256;base+=16){
+    let line='';
+    for(let i=0;i<16;i++){
+      const addr=base+i;
+      line+=(addr>=0x20&&addr<=0x7E)?String.fromCharCode(addr):String.fromCodePoint(0xE000+addr);
+    }
+    t+=line+'\n';
+  }
+  return t.trimEnd();
+}
+
+function setPreviewCols(n){
+  previewCols=n;
+  document.getElementById('col40btn').classList.toggle('cur',n===40);
+  document.getElementById('col80btn').classList.toggle('cur',n===80);
+  renderPreview();
+}
+
+function renderPreview(){
+  const ZOOM_X=previewCols===40?2:1, ZOOM_Y=2, COLS=previewCols;
+  const cellW=fmtWidth, cellH=fmtRows;
+  const text=document.getElementById('ptext').value;
+  const wrapped=[];
+  for(const rawLine of text.split('\n')){
+    if(rawLine.length===0){wrapped.push('');continue;}
+    for(let i=0;i<rawLine.length;i+=COLS)wrapped.push(rawLine.slice(i,i+COLS));
+  }
+  const lineCount=Math.min(wrapped.length,MAX_PREVIEW_LINES);
+  const cv=document.getElementById('pcanvas');
+  cv.width=COLS*cellW*ZOOM_X;
+  cv.height=lineCount*cellH*ZOOM_Y;
+  const canvasOuterWidth=cv.width+2,canvasOuterHeight=cv.height+2;
+  cv.style.width=canvasOuterWidth+'px';
+  cv.style.height=canvasOuterHeight+'px';
+  document.getElementById('ptext').style.width=canvasOuterWidth+'px';
+  const ctx=cv.getContext('2d');
+  ctx.imageSmoothingEnabled=false;
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#4ec9b0';
+  for(let li=0;li<lineCount;li++){
+    const line=wrapped[li];
+    for(let ci=0;ci<line.length;ci++){
+      const code=UNICODE_TO_TRS[line.charCodeAt(ci)];
+      if(code===undefined||code>=NUM_CHARS)continue;
+      const ox=ci*cellW*ZOOM_X,oy=li*cellH*ZOOM_Y;
+      for(let r=0;r<fmtRows;r++)
+        for(let c=0;c<fmtWidth;c++)
+          if(getPixel(curBlock,code,r,c))ctx.fillRect(ox+c*ZOOM_X,oy+r*ZOOM_Y,ZOOM_X,ZOOM_Y);
+    }
+  }
+}
+
+function parseRom(bytes){
+  file1K=(bytes.length===1024&&modelType==='std');
+  upperDirty=false;
+  const bsz=blockBytes();
+  // 1K file: treat as 2K (upper 128 chars start blank)
+  const storeSize=file1K?2048:Math.max(bsz,Math.ceil(bytes.length/bsz)*bsz);
+  romBytes=new Uint8Array(storeSize);
+  romBytes.set(bytes.subarray(0,Math.min(bytes.length,storeSize)));
+  numBlocks=Math.max(1,storeSize/bsz);
+  curBlock=0;
+  undoStack=[];
+  document.getElementById('fileinfo').textContent=
+    `${romFileName||'(unsaved)'}: ${bytes.length} bytes`;
+  document.getElementById('warn1k').classList.toggle('show',file1K);
+  document.getElementById('charGridHdr').textContent=
+    `Characters ($00-$${(NUM_CHARS-1).toString(16).toUpperCase().padStart(2,'0')})`;
+  rebuildBlockRow();
+  buildCharMap();
+  selectChar(0x41<NUM_CHARS?0x41:0x01);
+  renderPreview();
+  updateStatus();
+}
+
+async function loadRom(){
+  if(hasFSAccess){
+    let handle;
+    try{
+      [handle]=await window.showOpenFilePicker({
+        id:'trs80-rom-editor',
+        types:[{description:'TRS-80 Character ROM',accept:{'application/octet-stream':['.bin','.rom','.z25','.z29']}}]
+      });
+    }catch(err){return;}
+    try{
+      const file=await handle.getFile();
+      const buf=await file.arrayBuffer();
+      romFileHandle=handle;
+      romFileName=file.name;
+      parseRom(new Uint8Array(buf));
+    }catch(err){alert('Failed to read ROM file: '+err.message);}
+  }else{
+    document.getElementById('fileinput').click();
+  }
+}
+
+function handleFileInputFallback(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    romFileHandle=null;
+    romFileName=file.name;
+    parseRom(new Uint8Array(ev.target.result));
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value='';
+}
+
+async function saveRom(){
+  const bytes=(file1K&&!upperDirty)?romBytes.slice(0,1024):romBytes;
+  if(romFileHandle){
+    try{
+      const writable=await romFileHandle.createWritable();
+      await writable.write(bytes);
+      await writable.close();
+      flashSaved();
+      return;
+    }catch(err){alert('Could not write directly to file, falling back to download.\n'+err.message);}
+  }
+  if(hasFSAccess){
+    try{
+      const handle=await window.showSaveFilePicker({
+        id:'trs80-rom-editor',
+        suggestedName:romFileName||'trs80_font.bin',
+        types:[{description:'TRS-80 Character ROM',accept:{'application/octet-stream':['.bin']}}]
+      });
+      const writable=await handle.createWritable();
+      await writable.write(bytes);
+      await writable.close();
+      romFileHandle=handle;
+      romFileName=handle.name;
+      flashSaved();
+      return;
+    }catch(err){if(err.name==='AbortError')return;}
+  }
+  downloadBytes(romFileName||'trs80_font.bin',bytes);
+}
+
+function flashSaved(){
+  const s=document.getElementById('copystat');
+  s.textContent='Saved!';
+  s.classList.add('show');
+  setTimeout(()=>{s.classList.remove('show');s.textContent='Copied!';},1500);
+}
+
+function downloadBytes(name,bytes){
+  const blob=new Blob([bytes],{type:'application/octet-stream'});
+  const link=document.createElement('a');
+  link.download=name;
+  link.href=URL.createObjectURL(blob);
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function download(name,content){
+  const blob=new Blob([content],{type:'text/plain'});
+  const link=document.createElement('a');
+  link.download=name;
+  link.href=URL.createObjectURL(blob);
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function rowToBitmap(addr,r){
+  let s='';
+  for(let c=0;c<fmtWidth;c++)s+=getPixel(curBlock,addr,r,c)?'#':'.';
+  return s;
+}
+
+function exportC(){
+  let out=`// TRS-80 character ROM: ${romFileName||'(unsaved)'}\n`;
+  out+=`// Model: ${modelType==='std'?'Standard':'Model II'}, stride=${CHAR_STRIDE}, chars=${NUM_CHARS}\n`;
+  out+=`// Format: shift=${fmtShift} width=${fmtWidth} height=${fmtRows} mirror=${fmtMirror} invert=${fmtInvert} (block ${curBlock})\n\n`;
+  out+='unsigned char rom_data[] = {\n';
+  for(let addr=0;addr<NUM_CHARS;addr++){
+    const off=charOffset(curBlock,addr);
+    out+=`  /* $${addr.toString(16).toUpperCase().padStart(2,'0')}`;
+    if(addr>=0x20&&addr<=0x7E)out+=` '${String.fromCharCode(addr)}'`;
+    out+='\n';
+    for(let r=0;r<fmtRows;r++)out+='     '+rowToBitmap(addr,r)+'\n';
+    out+='  */\n';
+    const bvals=[];
+    for(let r=0;r<CHAR_STRIDE;r++)bvals.push(romBytes[off+r]||0);
+    out+='  '+bvals.map(v=>'0x'+v.toString(16).padStart(2,'0').toUpperCase()).join(', ')+',\n';
+  }
+  out+='};\n';
+  download('rom_dump.c',out);
+}
+
+function exportPNG(){
+  const scale=3;
+  const cols=16,rows=Math.ceil(NUM_CHARS/16);
+  const cw=fmtWidth*scale,ch=fmtRows*scale;
+  const labelH=10;
+  const cv=document.createElement('canvas');
+  cv.width=cols*(cw+1)+1;
+  cv.height=rows*(ch+labelH+1)+1;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#1e1e1e';
+  ctx.fillRect(0,0,cv.width,cv.height);
+  for(let addr=0;addr<NUM_CHARS;addr++){
+    const col=addr%cols,row=Math.floor(addr/cols);
+    const ox=col*(cw+1)+1,oy=row*(ch+labelH+1)+1+labelH;
+    ctx.strokeStyle='#333';
+    ctx.strokeRect(ox-1,oy-labelH-1,cw+1,ch+labelH+1);
+    ctx.fillStyle='#888';
+    ctx.font='8px monospace';
+    ctx.fillText('$'+addr.toString(16).toUpperCase().padStart(2,'0'),ox,oy-2);
+    ctx.fillStyle='#4ec9b0';
+    for(let r=0;r<fmtRows;r++)
+      for(let c=0;c<fmtWidth;c++)
+        if(getPixel(curBlock,addr,r,c))ctx.fillRect(ox+c*scale,oy+r*scale,scale,scale);
+  }
+  const link=document.createElement('a');
+  link.download='rom_charset_block'+curBlock+'.png';
+  link.href=cv.toDataURL('image/png');
+  link.click();
+}
+
+function init(){
+  syncFmtControls();
+  document.getElementById('ptext').value=buildDefaultText();
+  rebuildBlockRow();
+  buildCharMap();
+  buildGrid();
+  selectChar(sel);
+  renderPreview();
+  document.getElementById('ptext').addEventListener('input',renderPreview);
+  document.getElementById('fileinput').addEventListener('change',handleFileInputFallback);
+  document.addEventListener('mouseup',()=>{isDrawing=false;});
+  if(!hasFSAccess){
+    document.getElementById('status').textContent='File System Access API not available; using manual download/upload.';
+  }
+}
+
+document.addEventListener('keydown',(e)=>{
+  const tag=document.activeElement.tagName;
+  if(tag==='TEXTAREA'||tag==='INPUT')return;
+  if(e.ctrlKey&&e.key==='c'){e.preventDefault();copyGlyph();}
+  if(e.ctrlKey&&e.key==='v'){e.preventDefault();pasteGlyph();}
+  if(e.ctrlKey&&e.key==='z'){e.preventDefault();undo();}
+});
+
+init();
+</script>
+</body>
+</html>
