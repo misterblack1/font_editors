@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>IBM CGA/MDA Character ROM Editor</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1e1e1e;color:#d4d4d4;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;overflow:hidden;height:100vh}
+#toolbar{display:flex;align-items:center;gap:6px;padding:6px 10px;background:#252526;border-bottom:1px solid #3e3e3e;flex-wrap:wrap}
+button{background:#0e639c;color:#fff;border:none;padding:5px 12px;cursor:pointer;font-size:11px;border-radius:3px;white-space:nowrap}
+button:hover{background:#1177bb}
+button.sec{background:#3a3a3a}
+button.sec:hover{background:#4a4a4a}
+button.warn{background:#6a3a1a}
+button.warn:hover{background:#8a4a2a}
+button.tiny{font-size:9px;padding:3px 6px}
+button.block{background:#3a3a3a;flex:1;text-align:left}
+button.block.cur{background:#0e639c}
+.sep{width:1px;height:22px;background:#3e3e3e;margin:0 2px}
+#status{margin-left:auto;color:#888;font-size:11px}
+#main{display:flex;height:calc(100vh - 38px)}
+#sidebar{width:320px;min-width:320px;background:#252526;border-right:1px solid #3e3e3e;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;padding:8px}
+#sidebar h3{margin:10px 0 6px;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px}
+#sidebar h3:first-child{margin-top:0}
+#fileinfo{font-size:11px;color:#9cdcfe;line-height:1.5;word-break:break-all}
+#blockrow{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.blockwrap{display:flex;gap:4px;align-items:center}
+.regiontype{background:#1e1e1e;color:#d4d4d4;border:1px solid #3e3e3e;font-size:10px}
+.fmtrow{display:flex;gap:10px;align-items:center;margin-top:6px;font-size:11px;flex-wrap:wrap}
+.cg{display:grid;grid-template-columns:repeat(16,1fr);gap:2px;justify-content:start}
+.cc{display:flex;align-items:center;justify-content:center;cursor:pointer;background:#1a1a1a}
+.cc:hover{outline:1px solid #0e639c}
+.cc.sel{outline:2px solid #0078d4;background:#094771}
+.cc.data{background:#1a2a1a}
+.cc.data.sel{background:#094771}
+.cc canvas{image-rendering:pixelated;display:block}
+#edpan{flex:1;display:flex;flex-direction:column;align-items:center;padding:12px;overflow-y:auto;min-width:360px}
+.ehdr{display:flex;flex-direction:column;align-items:center;margin-bottom:8px}
+.ehdr .ch{font-size:28px;font-weight:bold;color:#4ec9b0}
+.ehdr .info{color:#888;font-size:12px;margin-top:2px;text-align:center}
+#pgrid{display:grid;gap:1px;background:#444;border:2px solid #444;margin-top:8px}
+.px{width:40px;height:34px;background:#2a2a2a;cursor:crosshair;transition:background .05s}
+.px.on{background:#4ec9b0}
+.px:hover{outline:2px solid #fff;outline-offset:-2px}
+.hxd{margin-top:10px;font-family:'Consolas','Courier New',monospace;font-size:12px;color:#9cdcfe;text-align:left;line-height:1.7;white-space:pre}
+.hxd .rl{color:#555}
+.hxd .rv{color:#9cdcfe}
+.hxd .rb{color:#666}
+#prevpan{width:760px;min-width:760px;background:#252526;border-left:1px solid #3e3e3e;display:flex;flex-direction:column;padding:6px;overflow:hidden}
+#prevpan h3{margin-bottom:4px;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px}
+.colmode{display:flex;gap:4px;margin-bottom:6px}
+.coltoggle.cur{background:#0e639c}
+#ptext{background:#1e1e1e;color:#d4d4d4;border:1px solid #3e3e3e;font-family:'Cascadia Mono','Cascadia Code','Consolas',monospace;font-size:11px;padding:4px;resize:vertical;margin-bottom:4px}
+#pcanvas{border:1px solid #3e3e3e;background:#000;display:block;image-rendering:pixelated}
+.copystat{font-size:11px;color:#4ec9b0;padding:2px 6px;background:#1a2a2a;border-radius:2px;display:none}
+.copystat.show{display:inline}
+.note{font-size:11px;color:#fff;margin-top:10px;text-align:left;line-height:1.6}
+.note p{margin-bottom:8px}
+.note p:last-child{margin-bottom:0}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <button onclick="loadRom()">Load ROM (.bin)</button>
+  <button onclick="saveRom()">Save ROM (.bin)</button>
+  <div class="sep"></div>
+  <button class="sec" onclick="exportC()">Export C</button>
+  <button class="sec" onclick="exportPNG()">Export PNG</button>
+  <button class="sec" onclick="exportRegion()">Export Font (.bin)</button>
+  <div class="sep"></div>
+  <button class="sec" onclick="importRegion()">Import Font (.bin)</button>
+  <div class="sep"></div>
+  <button class="sec" onclick="copyGlyph()">Copy Glyph</button>
+  <button class="sec" onclick="pasteGlyph()">Paste Glyph</button>
+  <button class="sec" onclick="undo()">Undo</button>
+  <div class="sep"></div>
+  <button class="warn" onclick="clearGlyph()">Clear</button>
+  <span class="copystat" id="copystat">Copied!</span>
+  <span id="status"></span>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <h3>ROM Format</h3>
+    <div id="fileinfo">No file loaded (blank 2048-byte buffer)</div>
+    <div id="blockrow"></div>
+    <div class="fmtrow">
+      <label><input type="checkbox" id="fmtMirror" onchange="onFormatChange()"> Mirror columns</label>
+      <label><input type="checkbox" id="fmtInvert" onchange="onFormatChange()"> Invert bits</label>
+    </div>
+    <h3>Characters ($00-$FF)</h3>
+    <div class="cg" id="chargrid"></div>
+    <div class="note">
+      <p>IBM CGA and MDA character ROMs are always 8 pixels wide. MDA hardware duplicates the right most pixel to create the 9th pixel.</p>
+      <p>Mirror/Invert stay adjustable in case an unusual clone ROM packs its bits backwards or inverted.</p>
+      <p>Each block is 2KB and can be set to CGA (8x8, one block) or MDA (8x14, two blocks) using the dropdown next to it. Picking MDA pairs that block with the next one: rows 0-7 come from the first block, rows 8-13 come from the first 6 bytes of each character's slot in the second block. The leftover 2 bytes per character in that second block are unused.</p>
+      <p>Edits always preserve the bytes' unused bits exactly as loaded. Saving writes the file in the exact same byte layout it was loaded in, only the pixels you actually edit change.</p>
+    </div>
+  </div>
+  <div id="edpan">
+    <div class="ehdr">
+      <div class="ch" id="edchar">$41</div>
+      <div class="info" id="edinfo">Region 0 (CGA, $0000-$07FF) | char offset $0008</div>
+    </div>
+    <div id="pgrid"></div>
+    <div class="hxd" id="hexdisp"></div>
+  </div>
+  <div id="prevpan">
+    <h3>Live Preview</h3>
+    <div class="colmode">
+      <button id="col80btn" class="sec tiny coltoggle cur" onclick="setPreviewCols(80)">80 Column</button>
+      <button id="col40btn" class="sec tiny coltoggle" onclick="setPreviewCols(40)">40 Column</button>
+    </div>
+    <textarea id="ptext" rows="20" spellcheck="false">THE QUICK BROWN FOX JUMPS
+OVER THE LAZY DOG!
+
+Adrian's Digital Basement
+
+0123456789 .,:;?!@#$%^&amp;*()[]
+/\&lt;&gt;=+-_
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
+
+░▒▓█ ┌─┬─┐ ♠♥♦♣ ☺☻ ▲▼◄►</textarea>
+    <canvas id="pcanvas"></canvas>
+  </div>
+</div>
+
+<input type="file" id="fileinput" accept=".bin,.rom" style="display:none">
+<input type="file" id="regionfileinput" accept=".bin,.rom" style="display:none">
+
+<script>
+const SLOT_SIZE=2048, FMT_WIDTH=8;
+let romBytes=new Uint8Array(SLOT_SIZE);
+let slotMode=['CGA'];
+let regions=[];
+let curRegionIdx=0;
+let sel=0x41;
+let clipboard=null;
+let isDrawing=false,drawVal=1;
+let undoStack=[];
+const MAX_UNDO=50;
+let romFileHandle=null, romFileName=null;
+const hasFSAccess='showOpenFilePicker' in window;
+
+let fmtMirror=false, fmtInvert=false;
+let previewCols=80;
+const PREVIEW_ROWS=20;
+
+const CP437_TO_UNICODE=[32,9786,9787,9829,9830,9827,9824,8226,9688,9675,9689,9794,9792,9834,9835,9788,
+9658,9668,8597,8252,182,167,9644,8616,8593,8595,8594,8592,8735,8596,9650,9660,
+32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,
+48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,
+64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,
+80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,
+96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,
+112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,8962,
+199,252,233,226,228,224,229,231,234,235,232,239,238,236,196,197,
+201,230,198,244,246,242,251,249,255,214,220,162,163,165,8359,402,
+225,237,243,250,241,209,170,186,191,8976,172,189,188,161,171,187,
+9617,9618,9619,9474,9508,9569,9570,9558,9557,9571,9553,9559,9565,9564,9563,9488,
+9492,9524,9516,9500,9472,9532,9566,9567,9562,9556,9577,9574,9568,9552,9580,9575,
+9576,9572,9573,9561,9560,9554,9555,9579,9578,9496,9484,9608,9604,9612,9616,9600,
+945,223,915,960,931,963,181,964,934,920,937,948,8734,966,949,8745,
+8801,177,8805,8804,8992,8993,247,8776,176,8729,183,8730,8319,178,9632,160];
+
+const UNICODE_TO_CP437={};
+for(let b=32;b<=126;b++)UNICODE_TO_CP437[b]=b;
+CP437_TO_UNICODE.forEach((cp,byte)=>{if(!(cp in UNICODE_TO_CP437))UNICODE_TO_CP437[cp]=byte;});
+
+function computeRegions(){
+  const numSlots=Math.max(1,Math.ceil(romBytes.length/SLOT_SIZE));
+  const out=[];
+  let i=0;
+  while(i<numSlots){
+    if(slotMode[i]==='MDA' && i+1<numSlots){
+      out.push({type:'MDA',rows:14,byteOffset:i*SLOT_SIZE,slotStart:i,slotCount:2});
+      i+=2;
+    }else{
+      out.push({type:'CGA',rows:8,byteOffset:i*SLOT_SIZE,slotStart:i,slotCount:1});
+      i+=1;
+    }
+  }
+  regions=out;
+}
+
+function curRegion(){return regions[curRegionIdx];}
+
+function regionIndexForSlot(slot){
+  return regions.findIndex(r=>slot>=r.slotStart && slot<r.slotStart+r.slotCount);
+}
+
+function regionIndexForByteOffset(off){
+  return regionIndexForSlot(Math.floor(off/SLOT_SIZE));
+}
+
+function charOffset(region,addr,r){
+  const lowOff=region.byteOffset+addr*8;
+  if(region.type==='MDA' && r>=8)return lowOff+SLOT_SIZE+(r-8);
+  return lowOff+r;
+}
+
+function getPixel(region,addr,r,c){
+  const off=charOffset(region,addr,r);
+  const byte=romBytes[off]||0;
+  const v=fmtInvert?(~byte&0xFF):byte;
+  const bitInV=fmtMirror?c:(FMT_WIDTH-1-c);
+  return (v>>bitInV)&1;
+}
+
+function setPixel(region,addr,r,c,on){
+  const off=charOffset(region,addr,r);
+  const bitInV=fmtMirror?c:(FMT_WIDTH-1-c);
+  const desired=fmtInvert?(on?0:1):(on?1:0);
+  let byte=romBytes[off]||0;
+  if(desired)byte|=(1<<bitInV); else byte&=~(1<<bitInV);
+  romBytes[off]=byte&0xFF;
+}
+
+function hasData(region,addr){
+  for(let r=0;r<region.rows;r++)for(let c=0;c<FMT_WIDTH;c++)if(getPixel(region,addr,r,c))return true;
+  return false;
+}
+
+function saveUndo(region,addr){
+  const offsets=[];
+  for(let r=0;r<region.rows;r++)offsets.push(charOffset(region,addr,r));
+  const bytes=offsets.map(o=>romBytes[o]);
+  undoStack.push({offsets,bytes});
+  if(undoStack.length>MAX_UNDO)undoStack.shift();
+}
+
+function undo(){
+  if(undoStack.length===0)return;
+  const state=undoStack.pop();
+  state.offsets.forEach((o,i)=>{romBytes[o]=state.bytes[i];});
+  const idx=regionIndexForByteOffset(state.offsets[0]);
+  if(idx>=0 && idx!==curRegionIdx){
+    curRegionIdx=idx;
+    buildGrid();
+    rebuildBlockRow();
+  }
+  const region=curRegion();
+  const addr=Math.floor((state.offsets[0]-region.byteOffset)/8);
+  selectChar(addr);
+  buildCharMap();
+  renderPreview();
+}
+
+function init(){
+  document.getElementById('fmtMirror').checked=fmtMirror;
+  document.getElementById('fmtInvert').checked=fmtInvert;
+  computeRegions();
+  rebuildBlockRow();
+  buildGrid();
+  buildCharMap();
+  selectChar(sel);
+  renderPreview();
+  document.getElementById('ptext').addEventListener('input',renderPreview);
+  document.getElementById('fileinput').addEventListener('change',handleFileInputFallback);
+  document.getElementById('regionfileinput').addEventListener('change',handleRegionFileInputFallback);
+  document.addEventListener('mouseup',()=>{isDrawing=false});
+  if(!hasFSAccess){
+    document.getElementById('status').textContent='File System Access API not supported in this browser; using manual download/upload.';
+  }
+}
+
+function onFormatChange(){
+  fmtMirror=document.getElementById('fmtMirror').checked;
+  fmtInvert=document.getElementById('fmtInvert').checked;
+  buildCharMap();
+  refreshGrid();
+  renderPreview();
+}
+
+function switchToRegion(idx){
+  curRegionIdx=idx;
+  buildGrid();
+  buildCharMap();
+  selectChar(sel);
+  renderPreview();
+  rebuildBlockRow();
+}
+
+function onRegionTypeChange(slotStart){
+  computeRegions();
+  let newIdx=regionIndexForSlot(slotStart);
+  if(newIdx<0)newIdx=0;
+  curRegionIdx=newIdx;
+  buildGrid();
+  buildCharMap();
+  selectChar(sel);
+  renderPreview();
+  rebuildBlockRow();
+}
+
+function rebuildBlockRow(){
+  const row=document.getElementById('blockrow');
+  row.innerHTML='';
+  regions.forEach((region,idx)=>{
+    const wrap=document.createElement('div');
+    wrap.className='blockwrap';
+
+    const btn=document.createElement('button');
+    btn.className='block'+(idx===curRegionIdx?' cur':'');
+    const startAddr=region.byteOffset.toString(16).toUpperCase().padStart(4,'0');
+    const endAddr=(region.byteOffset+region.slotCount*SLOT_SIZE-1).toString(16).toUpperCase().padStart(4,'0');
+    btn.textContent=`Region ${idx} ($${startAddr}-$${endAddr})`;
+    btn.onclick=()=>switchToRegion(idx);
+    wrap.appendChild(btn);
+
+    const sel2=document.createElement('select');
+    sel2.className='regiontype';
+    [['CGA','CGA (8x8)'],['MDA','MDA (8x14)']].forEach(([val,label])=>{
+      const opt=document.createElement('option');
+      opt.value=val;opt.textContent=label;
+      if(region.type===val)opt.selected=true;
+      sel2.appendChild(opt);
+    });
+    if(region.type==='CGA' && region.slotStart+1>=slotMode.length){
+      sel2.querySelector('option[value="MDA"]').disabled=true;
+    }
+    sel2.onchange=()=>{
+      slotMode[region.slotStart]=sel2.value;
+      onRegionTypeChange(region.slotStart);
+    };
+    wrap.appendChild(sel2);
+
+    row.appendChild(wrap);
+  });
+}
+
+const CHARGRID_COLS=16, CHARGRID_GAP=2, SIDEBAR_INNER=320-16;
+const MINI_SCALE=(()=>{
+  const avail=SIDEBAR_INNER-(CHARGRID_COLS-1)*CHARGRID_GAP;
+  const perCol=avail/CHARGRID_COLS;
+  return Math.max(1,Math.floor(perCol/FMT_WIDTH));
+})();
+
+function buildCharMap(){
+  const region=curRegion();
+  const g=document.getElementById('chargrid');
+  g.innerHTML='';
+  for(let addr=0;addr<256;addr++){
+    const d=document.createElement('div');
+    d.className='cc'+(hasData(region,addr)?' data':'');
+    d.id='cc'+addr;
+    d.title='$'+addr.toString(16).toUpperCase().padStart(2,'0');
+    d.onclick=()=>selectChar(addr);
+    const cv=document.createElement('canvas');
+    cv.width=FMT_WIDTH*MINI_SCALE;cv.height=region.rows*MINI_SCALE;
+    d.appendChild(cv);
+    g.appendChild(d);
+    drawMiniGlyph(cv,addr);
+  }
+}
+
+function drawMiniGlyph(cv,addr){
+  const region=curRegion();
+  const ctx=cv.getContext('2d');
+  ctx.imageSmoothingEnabled=false;
+  ctx.fillStyle='#1e1e1e';
+  ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#4ec9b0';
+  for(let r=0;r<region.rows;r++){
+    for(let c=0;c<FMT_WIDTH;c++){
+      if(getPixel(region,addr,r,c)){
+        ctx.fillRect(c*MINI_SCALE,r*MINI_SCALE,MINI_SCALE,MINI_SCALE);
+      }
+    }
+  }
+}
+
+function buildGrid(){
+  const region=curRegion();
+  const g=document.getElementById('pgrid');
+  g.style.gridTemplateColumns=`repeat(${FMT_WIDTH},40px)`;
+  g.style.gridTemplateRows=`repeat(${region.rows},34px)`;
+  g.innerHTML='';
+  for(let r=0;r<region.rows;r++){
+    for(let c=0;c<FMT_WIDTH;c++){
+      const px=document.createElement('div');
+      px.className='px';
+      px.dataset.r=r;
+      px.dataset.c=c;
+      px.addEventListener('mousedown',(e)=>{
+        e.preventDefault();
+        isDrawing=true;
+        const reg=curRegion();
+        if(e.button===0)drawVal=getPixel(reg,sel,r,c)?0:1;
+        else if(e.button===2)drawVal=0;
+        saveUndo(reg,sel);
+        setPixel(reg,sel,r,c,drawVal);
+        afterEdit();
+      });
+      px.addEventListener('mouseenter',()=>{
+        if(isDrawing){setPixel(curRegion(),sel,r,c,drawVal);afterEdit();}
+      });
+      px.addEventListener('contextmenu',(e)=>e.preventDefault());
+      g.appendChild(px);
+    }
+  }
+}
+
+function afterEdit(){
+  refreshGrid();
+  updateMiniGlyph(sel);
+  renderPreview();
+  updateStatus();
+}
+
+function refreshGrid(){
+  const region=curRegion();
+  const pxs=document.getElementById('pgrid').children;
+  for(let r=0;r<region.rows;r++){
+    for(let c=0;c<FMT_WIDTH;c++){
+      const idx=r*FMT_WIDTH+c;
+      if(getPixel(region,sel,r,c))pxs[idx].classList.add('on');
+      else pxs[idx].classList.remove('on');
+    }
+  }
+  updateHexDisplay();
+}
+
+function updateHexDisplay(){
+  const region=curRegion();
+  const el=document.getElementById('hexdisp');
+  let html='';
+  for(let r=0;r<region.rows;r++){
+    let bits='';
+    for(let c=0;c<FMT_WIDTH;c++)bits+=getPixel(region,sel,r,c)?'#':'.';
+    const off=charOffset(region,sel,r);
+    const raw=romBytes[off]||0;
+    const hex=raw.toString(16).padStart(2,'0').toUpperCase();
+    const addrLabel='$'+off.toString(16).toUpperCase().padStart(4,'0');
+    html+=`<span class="rl">${String(r).padStart(2,'0')}</span>  <span class="rl">${addrLabel}</span>  <span class="rv">0x${hex}</span>  <span class="rb">${bits}</span>\n`;
+  }
+  el.innerHTML=html;
+}
+
+function updateMiniGlyph(addr){
+  const el=document.getElementById('cc'+addr);
+  if(!el)return;
+  const cv=el.querySelector('canvas');
+  if(cv)drawMiniGlyph(cv,addr);
+  if(hasData(curRegion(),addr))el.classList.add('data');
+  else el.classList.remove('data');
+}
+
+function selectChar(addr){
+  const old=document.querySelector('.cc.sel');
+  if(old)old.classList.remove('sel');
+  sel=addr;
+  const el=document.getElementById('cc'+addr);
+  if(el)el.classList.add('sel');
+  document.getElementById('edchar').textContent='$'+addr.toString(16).toUpperCase().padStart(2,'0');
+  const region=curRegion();
+  const regionStart=region.byteOffset.toString(16).toUpperCase().padStart(4,'0');
+  const regionEnd=(region.byteOffset+region.slotCount*SLOT_SIZE-1).toString(16).toUpperCase().padStart(4,'0');
+  const off0=charOffset(region,addr,0).toString(16).toUpperCase().padStart(4,'0');
+  const glyphChar=String.fromCodePoint(CP437_TO_UNICODE[addr]);
+  let info=`Region ${curRegionIdx} (${region.type}, $${regionStart}-$${regionEnd}) | char offset $${off0} | CP437: '${glyphChar}'`;
+  document.getElementById('edinfo').textContent=info;
+  refreshGrid();
+  updateStatus();
+}
+
+function updateStatus(){
+  const region=curRegion();
+  let count=0;
+  for(let i=0;i<256;i++)if(hasData(region,i))count++;
+  const fileLabel=romFileName?` | File: ${romFileName}`:'';
+  document.getElementById('status').textContent=`${count}/256 glyphs with data in region ${curRegionIdx} | Selected: $${sel.toString(16).toUpperCase().padStart(2,'0')}${fileLabel}`;
+}
+
+function clearGlyph(){
+  const region=curRegion();
+  saveUndo(region,sel);
+  for(let r=0;r<region.rows;r++)for(let c=0;c<FMT_WIDTH;c++)setPixel(region,sel,r,c,0);
+  afterEdit();
+}
+
+function copyGlyph(){
+  const region=curRegion();
+  const rows=[];
+  for(let r=0;r<region.rows;r++){
+    const row=[];
+    for(let c=0;c<FMT_WIDTH;c++)row.push(getPixel(region,sel,r,c));
+    rows.push(row);
+  }
+  clipboard={rowCount:region.rows,rows};
+  const s=document.getElementById('copystat');
+  s.classList.add('show');
+  setTimeout(()=>s.classList.remove('show'),1500);
+}
+
+function pasteGlyph(){
+  if(!clipboard)return;
+  const region=curRegion();
+  saveUndo(region,sel);
+  const rows=Math.min(clipboard.rowCount,region.rows);
+  for(let r=0;r<rows;r++)for(let c=0;c<FMT_WIDTH;c++)setPixel(region,sel,r,c,clipboard.rows[r][c]);
+  afterEdit();
+}
+
+function setPreviewCols(n){
+  previewCols=n;
+  document.getElementById('col80btn').classList.toggle('cur',n===80);
+  document.getElementById('col40btn').classList.toggle('cur',n===40);
+  renderPreview();
+}
+
+function renderPreview(){
+  const region=curRegion();
+  const BASE_ZOOM_Y=2;
+  const SCANLINES_PER_SCREEN={CGA:200,MDA:350};
+  const ZOOM_Y=Math.max(1,Math.round(BASE_ZOOM_Y*SCANLINES_PER_SCREEN.CGA/SCANLINES_PER_SCREEN[region.type]));
+  const ZOOM_X=previewCols===40?2:1,COL_GAP=0,LINE_GAP=0;
+  const COLS=previewCols;
+  const cellW=FMT_WIDTH+COL_GAP,cellH=region.rows+LINE_GAP;
+  const text=document.getElementById('ptext').value;
+  const wrapped=[];
+  for(const rawLine of text.split('\n')){
+    if(rawLine.length===0){wrapped.push('');continue;}
+    for(let i=0;i<rawLine.length;i+=COLS)wrapped.push(rawLine.slice(i,i+COLS));
+  }
+  const lineCount=Math.min(wrapped.length,PREVIEW_ROWS);
+  const cv=document.getElementById('pcanvas');
+  cv.width=COLS*cellW*ZOOM_X;
+  cv.height=PREVIEW_ROWS*cellH*ZOOM_Y;
+  const canvasOuterWidth=cv.width+2,canvasOuterHeight=cv.height+2;
+  cv.style.width=canvasOuterWidth+'px';
+  cv.style.height=canvasOuterHeight+'px';
+  document.getElementById('ptext').style.width=canvasOuterWidth+'px';
+  const ctx=cv.getContext('2d');
+  ctx.imageSmoothingEnabled=false;
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#4ec9b0';
+  for(let li=0;li<lineCount;li++){
+    const line=wrapped[li];
+    for(let ci=0;ci<line.length;ci++){
+      const code=UNICODE_TO_CP437[line.charCodeAt(ci)];
+      if(code===undefined)continue;
+      const ox=ci*cellW*ZOOM_X,oy=li*cellH*ZOOM_Y;
+      for(let r=0;r<region.rows;r++){
+        for(let c=0;c<FMT_WIDTH;c++){
+          if(getPixel(region,code,r,c))ctx.fillRect(ox+c*ZOOM_X,oy+r*ZOOM_Y,ZOOM_X,ZOOM_Y);
+        }
+      }
+    }
+  }
+}
+
+function parseRom(bytes){
+  const numSlots=Math.max(1,Math.ceil(bytes.length/SLOT_SIZE));
+  romBytes=new Uint8Array(numSlots*SLOT_SIZE);
+  romBytes.set(bytes.subarray(0,Math.min(bytes.length,romBytes.length)));
+  slotMode=new Array(numSlots).fill('CGA');
+  computeRegions();
+  curRegionIdx=0;
+  undoStack=[];
+  document.getElementById('fileinfo').textContent=
+    `${romFileName||'(unsaved)'}: ${bytes.length} bytes, ${numSlots} block${numSlots>1?'s':''} of $0800 bytes each`;
+  rebuildBlockRow();
+  buildGrid();
+  buildCharMap();
+  selectChar(sel);
+  renderPreview();
+  updateStatus();
+}
+
+async function loadRom(){
+  if(hasFSAccess){
+    let handle;
+    try{
+      [handle]=await window.showOpenFilePicker({
+        id:'ibm-cga-rom-editor',
+        types:[{description:'CGA/MDA Character ROM',accept:{'application/octet-stream':['.bin','.rom']}}]
+      });
+    }catch(err){
+      return;
+    }
+    try{
+      const file=await handle.getFile();
+      const buf=await file.arrayBuffer();
+      romFileHandle=handle;
+      romFileName=file.name;
+      parseRom(new Uint8Array(buf));
+    }catch(err){
+      alert('Failed to read ROM file: '+err.message);
+    }
+  }else{
+    document.getElementById('fileinput').click();
+  }
+}
+
+function handleFileInputFallback(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    romFileHandle=null;
+    romFileName=file.name;
+    parseRom(new Uint8Array(ev.target.result));
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value='';
+}
+
+async function saveRom(){
+  const bytes=romBytes;
+  if(romFileHandle){
+    try{
+      const writable=await romFileHandle.createWritable();
+      await writable.write(bytes);
+      await writable.close();
+      flashSaved();
+      return;
+    }catch(err){
+      alert('Could not write directly to the file, falling back to download.\n'+err.message);
+    }
+  }
+  if(hasFSAccess){
+    try{
+      const handle=await window.showSaveFilePicker({
+        id:'ibm-cga-rom-editor',
+        suggestedName:romFileName||'cga_font.bin',
+        types:[{description:'CGA/MDA Character ROM',accept:{'application/octet-stream':['.bin']}}]
+      });
+      const writable=await handle.createWritable();
+      await writable.write(bytes);
+      await writable.close();
+      romFileHandle=handle;
+      romFileName=handle.name;
+      flashSaved();
+      return;
+    }catch(err){
+      if(err.name==='AbortError')return;
+    }
+  }
+  downloadBytes(romFileName||'cga_font.bin',bytes);
+}
+
+function flashSaved(){
+  const s=document.getElementById('copystat');
+  s.textContent='Saved!';
+  s.classList.add('show');
+  setTimeout(()=>{s.classList.remove('show');s.textContent='Copied!';},1500);
+}
+
+function downloadBytes(name,bytes){
+  const blob=new Blob([bytes],{type:'application/octet-stream'});
+  const link=document.createElement('a');
+  link.download=name;
+  link.href=URL.createObjectURL(blob);
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function download(name,content){
+  const blob=new Blob([content],{type:'text/plain'});
+  const link=document.createElement('a');
+  link.download=name;
+  link.href=URL.createObjectURL(blob);
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function rowToBitmap(region,addr,r){
+  let s='';
+  for(let c=0;c<FMT_WIDTH;c++)s+=getPixel(region,addr,r,c)?'#':'.';
+  return s;
+}
+
+function exportC(){
+  const region=curRegion();
+  let out=`// IBM CGA/MDA character ROM dump: ${romFileName||'(unsaved)'}\n`;
+  out+=`// Region ${curRegionIdx}: ${region.type}, ${region.rows} rows per character, 8 pixels wide\n`;
+  out+=`// Mirror=${fmtMirror} Invert=${fmtInvert}\n\n`;
+  out+='unsigned char rom_data[] = {\n';
+  for(let addr=0;addr<256;addr++){
+    out+=`/* $${addr.toString(16).toUpperCase().padStart(2,'0')}\n`;
+    for(let r=0;r<region.rows;r++)out+='   '+rowToBitmap(region,addr,r)+'\n';
+    out+='*/\n';
+    const bytes=[];
+    for(let r=0;r<region.rows;r++)bytes.push(romBytes[charOffset(region,addr,r)]||0);
+    out+='        '+bytes.map(v=>'0x'+v.toString(16).padStart(2,'0').toUpperCase()).join(', ')+',\n';
+  }
+  out+='};\n';
+  download('rom_dump.c',out);
+}
+
+function exportPNG(){
+  const region=curRegion();
+  const scale=3;
+  const cols=16,rows=16;
+  const cw=FMT_WIDTH*scale,ch=region.rows*scale;
+  const labelH=10;
+  const cv=document.createElement('canvas');
+  cv.width=cols*(cw+1)+1;
+  cv.height=rows*(ch+labelH+1)+1;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#1e1e1e';
+  ctx.fillRect(0,0,cv.width,cv.height);
+  for(let addr=0;addr<256;addr++){
+    const col=addr%cols,row=Math.floor(addr/cols);
+    const ox=col*(cw+1)+1,oy=row*(ch+labelH+1)+1+labelH;
+    ctx.strokeStyle='#333';
+    ctx.strokeRect(ox-1,oy-labelH-1,cw+1,ch+labelH+1);
+    ctx.fillStyle='#888';
+    ctx.font='8px monospace';
+    ctx.fillText('$'+addr.toString(16).toUpperCase().padStart(2,'0'),ox,oy-2);
+    ctx.fillStyle='#4ec9b0';
+    for(let r=0;r<region.rows;r++){
+      for(let c=0;c<FMT_WIDTH;c++){
+        if(getPixel(region,addr,r,c))ctx.fillRect(ox+c*scale,oy+r*scale,scale,scale);
+      }
+    }
+  }
+  const link=document.createElement('a');
+  link.download='rom_charset_region'+curRegionIdx+'.png';
+  link.href=cv.toDataURL('image/png');
+  link.click();
+}
+
+function exportRegion(){
+  const region=curRegion();
+  const len=region.slotCount*SLOT_SIZE;
+  const bytes=romBytes.slice(region.byteOffset,region.byteOffset+len);
+  const base=(romFileName||'font').replace(/\.[^.]+$/,'');
+  downloadBytes(`${base}_region${curRegionIdx}_${region.type}.bin`,bytes);
+}
+
+async function importRegion(){
+  if(hasFSAccess){
+    let handle;
+    try{
+      [handle]=await window.showOpenFilePicker({
+        id:'ibm-cga-rom-editor-import',
+        types:[{description:'CGA/MDA Character ROM',accept:{'application/octet-stream':['.bin','.rom']}}]
+      });
+    }catch(err){
+      return;
+    }
+    try{
+      const file=await handle.getFile();
+      const buf=await file.arrayBuffer();
+      applyRegionImport(new Uint8Array(buf));
+    }catch(err){
+      alert('Failed to read font file: '+err.message);
+    }
+  }else{
+    document.getElementById('regionfileinput').click();
+  }
+}
+
+function handleRegionFileInputFallback(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    applyRegionImport(new Uint8Array(ev.target.result));
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value='';
+}
+
+function applyRegionImport(bytes){
+  const region=curRegion();
+  const expectedLen=region.slotCount*SLOT_SIZE;
+  if(bytes.length!==expectedLen){
+    alert(`Region ${curRegionIdx} is ${region.type} and expects exactly ${expectedLen} bytes (${region.slotCount} block${region.slotCount>1?'s':''} of $0800). The selected file is ${bytes.length} bytes. Import cancelled.`);
+    return;
+  }
+  romBytes.set(bytes,region.byteOffset);
+  undoStack=[];
+  buildCharMap();
+  selectChar(sel);
+  renderPreview();
+  updateStatus();
+}
+
+document.addEventListener('keydown',(e)=>{
+  if(e.ctrlKey&&e.key==='c'&&document.activeElement.tagName!=='TEXTAREA'&&document.activeElement.tagName!=='INPUT'){
+    e.preventDefault();
+    copyGlyph();
+  }
+  if(e.ctrlKey&&e.key==='v'&&document.activeElement.tagName!=='TEXTAREA'&&document.activeElement.tagName!=='INPUT'){
+    e.preventDefault();
+    pasteGlyph();
+  }
+  if(e.ctrlKey&&e.key==='z'&&document.activeElement.tagName!=='TEXTAREA'&&document.activeElement.tagName!=='INPUT'){
+    e.preventDefault();
+    undo();
+  }
+});
+
+init();
+</script>
+</body>
+</html>
