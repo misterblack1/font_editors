@@ -1,3 +1,9 @@
 # Helpful Font ROM Editors
 
-Web based font editors. Currently there is an Apple II font from editor.
+I created these tools to help me edit font roms as I couldn't find a good tool. They run in your browser. Run it locally or use/bookmark the links below:
+
+[Apple II Font Editor](https://htmlpreview.github.io/?https://github.com/misterblack1/font_editors/blob/main/editors/Apple_II.html)
+
+![Apple II Editor](/editors/previews/apple_II.png?raw=true "IBM PC Helper UI")
+
+
