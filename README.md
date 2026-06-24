@@ -10,7 +10,7 @@ These tools to help you edit font ROMs. They run entirely in your browser. You c
 
 [Commodore 64/128/PET/VIC-20 Font Editor](https://htmlpreview.github.io/?https://github.com/misterblack1/font_editors/blob/main/editors/Commodore.html)
 
-[Commodore 64/128/PET/VIC-20 Font Editor](https://htmlpreview.github.io/?https://github.com/misterblack1/font_editors/blob/main/editors/TRS80.html)
+[TRS-80 Font Editor](https://htmlpreview.github.io/?https://github.com/misterblack1/font_editors/blob/main/editors/TRS80.html)
 
 
 They look like this when running:
