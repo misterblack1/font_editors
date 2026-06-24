@@ -1,6 +1,6 @@
 # Helpful Font ROM Editors
 
-I created these tools to help me edit font ROMs as I couldn't find a good tool. They run in your browser. Run it locally or use/bookmark the links below:
+I created these tools to help me edit font ROMs as I couldn't find a good tool. They run entirely in your browser. You can open multiple editors in different tabs, and use the Copy and Paste feature to move glyphs between fonts. I have included some sample fonts in the /samples directory.
 
 [Apple II Font Editor](https://htmlpreview.github.io/?https://github.com/misterblack1/font_editors/blob/main/editors/Apple_II.html)
 
@@ -10,9 +10,8 @@ I created these tools to help me edit font ROMs as I couldn't find a good tool. 
 
 [Commodore 64/128/PET/VIC-20 Font Editor](https://htmlpreview.github.io/?https://github.com/misterblack1/font_editors/blob/main/editors/Commodore.html)
 
-You can open multiple editors in different tabs, and use the Copy and Paste feature to move glyphs between fonts.
 
-They look like this:
+They look like this when running:
 ![Apple II Editor](/editors/previews/apple_II.png)
 
 ![IBM CGA/MDA Editor](/editors/previews/ibm_editor_preview.png)
