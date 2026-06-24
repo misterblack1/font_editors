@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>IBM CGA/MDA Character ROM Editor</title>
+<title>Videx 80-Column Character ROM Editor</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#1e1e1e;color:#d4d4d4;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;overflow:hidden;height:100vh}
@@ -14,7 +14,7 @@ button.sec:hover{background:#4a4a4a}
 button.warn{background:#6a3a1a}
 button.warn:hover{background:#8a4a2a}
 button.tiny{font-size:9px;padding:3px 6px}
-button.block{background:#3a3a3a;flex:1;text-align:left}
+button.block{background:#3a3a3a;margin-bottom:2px}
 button.block.cur{background:#0e639c}
 .sep{width:1px;height:22px;background:#3e3e3e;margin:0 2px}
 #status{margin-left:auto;color:#888;font-size:11px}
@@ -23,10 +23,10 @@ button.block.cur{background:#0e639c}
 #sidebar h3{margin:10px 0 6px;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px}
 #sidebar h3:first-child{margin-top:0}
 #fileinfo{font-size:11px;color:#9cdcfe;line-height:1.5;word-break:break-all}
-#blockrow{display:flex;flex-direction:column;gap:4px;margin-top:6px}
-.blockwrap{display:flex;gap:4px;align-items:center}
-.regiontype{background:#1e1e1e;color:#d4d4d4;border:1px solid #3e3e3e;font-size:10px}
+#blockrow{display:flex;flex-direction:column;gap:2px;margin-top:6px}
 .fmtrow{display:flex;gap:10px;align-items:center;margin-top:6px;font-size:11px;flex-wrap:wrap}
+.fmtrow select{background:#1e1e1e;color:#d4d4d4;border:1px solid #3e3e3e;font-size:11px}
+.fmtrow.presets{gap:4px}
 .cg{display:grid;grid-template-columns:repeat(16,1fr);gap:2px;justify-content:start}
 .cc{display:flex;align-items:center;justify-content:center;cursor:pointer;background:#1a1a1a}
 .cc:hover{outline:1px solid #0e639c}
@@ -46,11 +46,9 @@ button.block.cur{background:#0e639c}
 .hxd .rl{color:#555}
 .hxd .rv{color:#9cdcfe}
 .hxd .rb{color:#666}
-#prevpan{width:760px;min-width:760px;background:#252526;border-left:1px solid #3e3e3e;display:flex;flex-direction:column;padding:6px;overflow:hidden}
+#prevpan{width:670px;min-width:670px;background:#252526;border-left:1px solid #3e3e3e;display:flex;flex-direction:column;padding:6px;overflow:hidden}
 #prevpan h3{margin-bottom:4px;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px}
-.colmode{display:flex;gap:4px;margin-bottom:6px}
-.coltoggle.cur{background:#0e639c}
-#ptext{background:#1e1e1e;color:#d4d4d4;border:1px solid #3e3e3e;font-family:'Cascadia Mono','Cascadia Code','Consolas',monospace;font-size:11px;padding:4px;resize:vertical;margin-bottom:4px}
+#ptext{background:#1e1e1e;color:#d4d4d4;border:1px solid #3e3e3e;font-family:'Consolas',monospace;font-size:11px;padding:4px;resize:vertical;margin-bottom:4px}
 #pcanvas{border:1px solid #3e3e3e;background:#000;display:block;image-rendering:pixelated}
 .copystat{font-size:11px;color:#4ec9b0;padding:2px 6px;background:#1a2a2a;border-radius:2px;display:none}
 .copystat.show{display:inline}
@@ -67,9 +65,6 @@ button.block.cur{background:#0e639c}
   <div class="sep"></div>
   <button class="sec" onclick="exportC()">Export C</button>
   <button class="sec" onclick="exportPNG()">Export PNG</button>
-  <button class="sec" onclick="exportRegion()">Export Font (.bin)</button>
-  <div class="sep"></div>
-  <button class="sec" onclick="importRegion()">Import Font (.bin)</button>
   <span class="copystat" id="copystat">Copied!</span>
   <span id="status"></span>
 </div>
@@ -80,21 +75,43 @@ button.block.cur{background:#0e639c}
     <div id="fileinfo">No file loaded (blank 2048-byte buffer)</div>
     <div id="blockrow"></div>
     <div class="fmtrow">
+      <label>Bit shift
+        <select id="fmtShift" onchange="onFormatChange()">
+          <option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option>
+        </select>
+      </label>
+      <label>Width
+        <select id="fmtWidth" onchange="onWidthChange()">
+          <option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option>
+        </select>
+      </label>
+      <label>Height
+        <select id="fmtRows" onchange="onRowsChange()">
+          <option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+          <option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option>
+        </select>
+      </label>
+    </div>
+    <div class="fmtrow">
       <label><input type="checkbox" id="fmtMirror" onchange="onFormatChange()"> Mirror columns</label>
       <label><input type="checkbox" id="fmtInvert" onchange="onFormatChange()"> Invert bits</label>
     </div>
-    <h3>Characters ($00-$FF)</h3>
+    <div class="fmtrow presets">
+      <button class="sec tiny" onclick="applyPreset(0,8,false,false)">Standard (sh0 w8)</button>
+      <button class="sec tiny" onclick="applyPreset(0,8,false,true)">Inverse (sh0 w8 inv)</button>
+    </div>
+    <h3>Characters ($00-$7F)</h3>
     <div class="cg" id="chargrid"></div>
     <div class="note">
-      <p>Always 8 pixels wide. MDA hardware duplicates the rightmost pixel for the 9th column.</p>
-      <p>CGA = 8x8 (1 block). MDA = 8x14 (2 blocks): rows 0-7 from the first block, rows 8-13 from the first 6 bytes of each char slot in the second block. The trailing 2 bytes per char in that second block are unused.</p>
-      <p>Mirror/Invert are there for clone ROMs with non-standard bit packing. Unused bits are left alone on save.</p>
+      <p>128 characters, 16 bytes each, indexed by ASCII code. Height sets how many rows to show. Plain letters use 7-9, line-drawing glyphs can use all 14.</p>
+      <p>Most ROMs: sh0 w8. Bit 7 carries data on line-drawing chars, so sh1 w7 crops it silently (plain text still looks fine either way). Some chips are bitwise-inverted; use the Inverse preset for those.</p>
+      <p>Unused bits are left alone on save.</p>
     </div>
   </div>
   <div id="edpan">
     <div class="ehdr">
       <div class="ch" id="edchar">$41</div>
-      <div class="info" id="edinfo">Region 0 (CGA, $0000-$07FF) | char offset $0008</div>
+      <div class="info" id="edinfo">Block 0 ($0000-$07FF) | file offset $0008-$000F</div>
     </div>
     <div id="pgrid"></div>
     <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;width:100%;max-width:360px">
@@ -115,12 +132,8 @@ button.block.cur{background:#0e639c}
     <div class="hxd" id="hexdisp"></div>
   </div>
   <div id="prevpan">
-    <h3>Live Preview</h3>
-    <div class="colmode">
-      <button id="col80btn" class="sec tiny coltoggle cur" onclick="setPreviewCols(80)">80 Column</button>
-      <button id="col40btn" class="sec tiny coltoggle" onclick="setPreviewCols(40)">40 Column</button>
-    </div>
-    <textarea id="ptext" rows="20" spellcheck="false">THE QUICK BROWN FOX JUMPS
+    <h3>Live Preview (ROM address = ASCII code)</h3>
+    <textarea id="ptext" rows="10" spellcheck="false">THE QUICK BROWN FOX JUMPS
 OVER THE LAZY DOG!
 
 Adrian's Digital Basement
@@ -128,21 +141,25 @@ Adrian's Digital Basement
 0123456789 .,:;?!@#$%^&amp;*()[]
 /\&lt;&gt;=+-_
 ABCDEFGHIJKLMNOPQRSTUVWXYZ
-
-░▒▓█ ┌─┬─┐ ♠♥♦♣ ☺☻ ▲▼◄►</textarea>
-    <canvas id="pcanvas"></canvas>
+abcdefghijklmnopqrstuvwxyz
+☺☻♥♦♣♠•◘○◙♂♀♪♫☼►◄↕‼¶§▬↨↑↓→←∟↔▲▼</textarea>
+    <canvas id="pcanvas" width="720" height="576"></canvas>
   </div>
 </div>
 
 <input type="file" id="fileinput" accept=".bin,.rom" style="display:none">
-<input type="file" id="regionfileinput" accept=".bin,.rom" style="display:none">
 
 <script>
-const SLOT_SIZE=2048, FMT_WIDTH=8;
-let romBytes=new Uint8Array(SLOT_SIZE);
-let slotMode=['CGA'];
-let regions=[];
-let curRegionIdx=0;
+const NUM_ADDRS=128, CHAR_STRIDE=16, BLOCK_SIZE=NUM_ADDRS*CHAR_STRIDE;
+
+// Videx $01-$1F use the same Unicode codepoints as CP437 $01-$1F
+const VIDEX_TO_UNICODE=[0,9786,9787,9829,9830,9827,9824,8226,9688,9675,9689,9794,9792,9834,9835,9788,
+9658,9668,8597,8252,182,167,9644,8616,8593,8595,8594,8592,8735,8596,9650,9660];
+const UNICODE_TO_VIDEX={};
+for(let b=0x20;b<=0x7F;b++)UNICODE_TO_VIDEX[b]=b;
+VIDEX_TO_UNICODE.forEach((cp,byte)=>{if(cp&&!(cp in UNICODE_TO_VIDEX))UNICODE_TO_VIDEX[cp]=byte;});
+let romBytes=new Uint8Array(BLOCK_SIZE);
+let numBlocks=1, curBlock=0;
 let sel=0x41;
 let clipboard=null;
 let isDrawing=false,drawVal=1;
@@ -151,129 +168,83 @@ const MAX_UNDO=50;
 let romFileHandle=null, romFileName=null;
 const hasFSAccess='showOpenFilePicker' in window;
 
-let fmtMirror=false, fmtInvert=false;
-let previewCols=80;
-const PREVIEW_ROWS=20;
+let fmtShift=0, fmtWidth=8, fmtMirror=false, fmtInvert=false, fmtRows=14;
 
-const CP437_TO_UNICODE=[32,9786,9787,9829,9830,9827,9824,8226,9688,9675,9689,9794,9792,9834,9835,9788,
-9658,9668,8597,8252,182,167,9644,8616,8593,8595,8594,8592,8735,8596,9650,9660,
-32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,
-48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,
-64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,
-80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,
-96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,
-112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,8962,
-199,252,233,226,228,224,229,231,234,235,232,239,238,236,196,197,
-201,230,198,244,246,242,251,249,255,214,220,162,163,165,8359,402,
-225,237,243,250,241,209,170,186,191,8976,172,189,188,161,171,187,
-9617,9618,9619,9474,9508,9569,9570,9558,9557,9571,9553,9559,9565,9564,9563,9488,
-9492,9524,9516,9500,9472,9532,9566,9567,9562,9556,9577,9574,9568,9552,9580,9575,
-9576,9572,9573,9561,9560,9554,9555,9579,9578,9496,9484,9608,9604,9612,9616,9600,
-945,223,915,960,931,963,181,964,934,920,937,948,8734,966,949,8745,
-8801,177,8805,8804,8992,8993,247,8776,176,8729,183,8730,8319,178,9632,160];
+function charOffset(block,addr){return block*BLOCK_SIZE+addr*CHAR_STRIDE;}
 
-const UNICODE_TO_CP437={};
-for(let b=32;b<=126;b++)UNICODE_TO_CP437[b]=b;
-CP437_TO_UNICODE.forEach((cp,byte)=>{if(!(cp in UNICODE_TO_CP437))UNICODE_TO_CP437[cp]=byte;});
-
-function computeRegions(){
-  const numSlots=Math.max(1,Math.ceil(romBytes.length/SLOT_SIZE));
-  const out=[];
-  let i=0;
-  while(i<numSlots){
-    if(slotMode[i]==='MDA' && i+1<numSlots){
-      out.push({type:'MDA',rows:14,byteOffset:i*SLOT_SIZE,slotStart:i,slotCount:2});
-      i+=2;
-    }else{
-      out.push({type:'CGA',rows:8,byteOffset:i*SLOT_SIZE,slotStart:i,slotCount:1});
-      i+=1;
-    }
-  }
-  regions=out;
-}
-
-function curRegion(){return regions[curRegionIdx];}
-
-function regionIndexForSlot(slot){
-  return regions.findIndex(r=>slot>=r.slotStart && slot<r.slotStart+r.slotCount);
-}
-
-function regionIndexForByteOffset(off){
-  return regionIndexForSlot(Math.floor(off/SLOT_SIZE));
-}
-
-function charOffset(region,addr,r){
-  const lowOff=region.byteOffset+addr*8;
-  if(region.type==='MDA' && r>=8)return lowOff+SLOT_SIZE+(r-8);
-  return lowOff+r;
-}
-
-function getPixel(region,addr,r,c){
-  const off=charOffset(region,addr,r);
+function getPixel(block,addr,r,c){
+  const off=charOffset(block,addr)+r;
   const byte=romBytes[off]||0;
   const v=fmtInvert?(~byte&0xFF):byte;
-  const bitInV=fmtMirror?c:(FMT_WIDTH-1-c);
-  return (v>>bitInV)&1;
+  const bitInV=fmtMirror?c:(fmtWidth-1-c);
+  return (v>>(fmtShift+bitInV))&1;
 }
 
-function setPixel(region,addr,r,c,on){
-  const off=charOffset(region,addr,r);
-  const bitInV=fmtMirror?c:(FMT_WIDTH-1-c);
+function setPixel(block,addr,r,c,on){
+  const off=charOffset(block,addr)+r;
+  const bitInV=fmtMirror?c:(fmtWidth-1-c);
+  const bitPos=fmtShift+bitInV;
   const desired=fmtInvert?(on?0:1):(on?1:0);
   let byte=romBytes[off]||0;
-  if(desired)byte|=(1<<bitInV); else byte&=~(1<<bitInV);
+  if(desired)byte|=(1<<bitPos); else byte&=~(1<<bitPos);
   romBytes[off]=byte&0xFF;
 }
 
-function hasData(region,addr){
-  for(let r=0;r<region.rows;r++)for(let c=0;c<FMT_WIDTH;c++)if(getPixel(region,addr,r,c))return true;
+function hasData(addr){
+  for(let r=0;r<fmtRows;r++)for(let c=0;c<fmtWidth;c++)if(getPixel(curBlock,addr,r,c))return true;
   return false;
 }
 
-function saveUndo(region,addr){
-  const offsets=[];
-  for(let r=0;r<region.rows;r++)offsets.push(charOffset(region,addr,r));
-  const bytes=offsets.map(o=>romBytes[o]);
-  undoStack.push({offsets,bytes});
+function saveUndo(block,addr){
+  const off=charOffset(block,addr);
+  undoStack.push({block,addr,bytes:romBytes.slice(off,off+CHAR_STRIDE)});
   if(undoStack.length>MAX_UNDO)undoStack.shift();
 }
 
 function undo(){
   if(undoStack.length===0)return;
   const state=undoStack.pop();
-  state.offsets.forEach((o,i)=>{romBytes[o]=state.bytes[i];});
-  const idx=regionIndexForByteOffset(state.offsets[0]);
-  if(idx>=0 && idx!==curRegionIdx){
-    curRegionIdx=idx;
-    buildGrid();
-    rebuildBlockRow();
-  }
-  const region=curRegion();
-  const addr=Math.floor((state.offsets[0]-region.byteOffset)/8);
-  selectChar(addr);
+  const off=charOffset(state.block,state.addr);
+  romBytes.set(state.bytes,off);
+  if(state.block!==curBlock){curBlock=state.block;rebuildBlockRow();}
+  selectChar(state.addr);
   buildCharMap();
   renderPreview();
 }
 
 function init(){
+  document.getElementById('fmtShift').value=fmtShift;
+  document.getElementById('fmtWidth').value=fmtWidth;
+  document.getElementById('fmtRows').value=fmtRows;
   document.getElementById('fmtMirror').checked=fmtMirror;
   document.getElementById('fmtInvert').checked=fmtInvert;
-  computeRegions();
   rebuildBlockRow();
-  buildGrid();
   buildCharMap();
+  buildGrid();
   selectChar(sel);
   renderPreview();
   document.getElementById('ptext').addEventListener('input',renderPreview);
   document.getElementById('fileinput').addEventListener('change',handleFileInputFallback);
-  document.getElementById('regionfileinput').addEventListener('change',handleRegionFileInputFallback);
   document.addEventListener('mouseup',()=>{isDrawing=false});
   if(!hasFSAccess){
     document.getElementById('status').textContent='File System Access API not supported in this browser; using manual download/upload.';
   }
 }
 
+function applyPreset(shift,width,mirror,invert){
+  fmtShift=shift;fmtWidth=width;fmtMirror=mirror;fmtInvert=invert;
+  document.getElementById('fmtShift').value=shift;
+  document.getElementById('fmtWidth').value=width;
+  document.getElementById('fmtMirror').checked=mirror;
+  document.getElementById('fmtInvert').checked=invert;
+  buildGrid();
+  buildCharMap();
+  selectChar(sel);
+  renderPreview();
+}
+
 function onFormatChange(){
+  fmtShift=parseInt(document.getElementById('fmtShift').value);
   fmtMirror=document.getElementById('fmtMirror').checked;
   fmtInvert=document.getElementById('fmtInvert').checked;
   buildCharMap();
@@ -281,82 +252,58 @@ function onFormatChange(){
   renderPreview();
 }
 
-function switchToRegion(idx){
-  curRegionIdx=idx;
+function onWidthChange(){
+  fmtWidth=parseInt(document.getElementById('fmtWidth').value);
   buildGrid();
   buildCharMap();
-  selectChar(sel);
+  refreshGrid();
   renderPreview();
-  rebuildBlockRow();
 }
 
-function onRegionTypeChange(slotStart){
-  computeRegions();
-  let newIdx=regionIndexForSlot(slotStart);
-  if(newIdx<0)newIdx=0;
-  curRegionIdx=newIdx;
+function onRowsChange(){
+  fmtRows=parseInt(document.getElementById('fmtRows').value);
   buildGrid();
   buildCharMap();
-  selectChar(sel);
+  refreshGrid();
   renderPreview();
-  rebuildBlockRow();
 }
 
 function rebuildBlockRow(){
+  numBlocks=Math.ceil(romBytes.length/BLOCK_SIZE);
   const row=document.getElementById('blockrow');
   row.innerHTML='';
-  regions.forEach((region,idx)=>{
-    const wrap=document.createElement('div');
-    wrap.className='blockwrap';
-
+  if(numBlocks<=1)return;
+  for(let b=0;b<numBlocks;b++){
     const btn=document.createElement('button');
-    btn.className='block'+(idx===curRegionIdx?' cur':'');
-    const startAddr=region.byteOffset.toString(16).toUpperCase().padStart(4,'0');
-    const endAddr=(region.byteOffset+region.slotCount*SLOT_SIZE-1).toString(16).toUpperCase().padStart(4,'0');
-    btn.textContent=`Region ${idx} ($${startAddr}-$${endAddr})`;
-    btn.onclick=()=>switchToRegion(idx);
-    wrap.appendChild(btn);
-
-    const sel2=document.createElement('select');
-    sel2.className='regiontype';
-    [['CGA','CGA (8x8)'],['MDA','MDA (8x14)']].forEach(([val,label])=>{
-      const opt=document.createElement('option');
-      opt.value=val;opt.textContent=label;
-      if(region.type===val)opt.selected=true;
-      sel2.appendChild(opt);
-    });
-    if(region.type==='CGA' && region.slotStart+1>=slotMode.length){
-      sel2.querySelector('option[value="MDA"]').disabled=true;
-    }
-    sel2.onchange=()=>{
-      slotMode[region.slotStart]=sel2.value;
-      onRegionTypeChange(region.slotStart);
-    };
-    wrap.appendChild(sel2);
-
-    row.appendChild(wrap);
-  });
+    btn.className='block'+(b===curBlock?' cur':'');
+    const startAddr=(b*BLOCK_SIZE).toString(16).toUpperCase().padStart(4,'0');
+    btn.textContent=`Block ${b} ($${startAddr})`;
+    btn.onclick=()=>{curBlock=b;rebuildBlockRow();buildCharMap();selectChar(sel);renderPreview();};
+    row.appendChild(btn);
+  }
 }
 
 const CHARGRID_COLS=16, CHARGRID_GAP=2, SIDEBAR_INNER=320-16;
-const MINI_SCALE=(()=>{
+let miniScale=3;
+
+function computeMiniScale(){
   const avail=SIDEBAR_INNER-(CHARGRID_COLS-1)*CHARGRID_GAP;
   const perCol=avail/CHARGRID_COLS;
-  return Math.max(1,Math.floor(perCol/FMT_WIDTH));
-})();
+  miniScale=Math.max(1,Math.floor(perCol/fmtWidth));
+}
 
 function buildCharMap(){
-  const region=curRegion();
+  computeMiniScale();
   const g=document.getElementById('chargrid');
   g.innerHTML='';
-  for(let addr=0;addr<256;addr++){
+  for(let addr=0;addr<NUM_ADDRS;addr++){
     const d=document.createElement('div');
-    d.className='cc'+(hasData(region,addr)?' data':'');
+    d.className='cc'+(hasData(addr)?' data':'');
     d.id='cc'+addr;
     d.title='$'+addr.toString(16).toUpperCase().padStart(2,'0');
     d.onclick=()=>selectChar(addr);
     const cv=document.createElement('canvas');
-    cv.width=FMT_WIDTH*MINI_SCALE;cv.height=region.rows*MINI_SCALE;
+    cv.width=fmtWidth*miniScale;cv.height=fmtRows*miniScale;
     d.appendChild(cv);
     g.appendChild(d);
     drawMiniGlyph(cv,addr);
@@ -364,29 +311,27 @@ function buildCharMap(){
 }
 
 function drawMiniGlyph(cv,addr){
-  const region=curRegion();
   const ctx=cv.getContext('2d');
   ctx.imageSmoothingEnabled=false;
   ctx.fillStyle='#1e1e1e';
   ctx.fillRect(0,0,cv.width,cv.height);
   ctx.fillStyle='#4ec9b0';
-  for(let r=0;r<region.rows;r++){
-    for(let c=0;c<FMT_WIDTH;c++){
-      if(getPixel(region,addr,r,c)){
-        ctx.fillRect(c*MINI_SCALE,r*MINI_SCALE,MINI_SCALE,MINI_SCALE);
+  for(let r=0;r<fmtRows;r++){
+    for(let c=0;c<fmtWidth;c++){
+      if(getPixel(curBlock,addr,r,c)){
+        ctx.fillRect(c*miniScale,r*miniScale,miniScale,miniScale);
       }
     }
   }
 }
 
 function buildGrid(){
-  const region=curRegion();
   const g=document.getElementById('pgrid');
-  g.style.gridTemplateColumns=`repeat(${FMT_WIDTH},40px)`;
-  g.style.gridTemplateRows=`repeat(${region.rows},34px)`;
+  g.style.gridTemplateColumns=`repeat(${fmtWidth},40px)`;
+  g.style.gridTemplateRows=`repeat(${fmtRows},34px)`;
   g.innerHTML='';
-  for(let r=0;r<region.rows;r++){
-    for(let c=0;c<FMT_WIDTH;c++){
+  for(let r=0;r<fmtRows;r++){
+    for(let c=0;c<fmtWidth;c++){
       const px=document.createElement('div');
       px.className='px';
       px.dataset.r=r;
@@ -394,15 +339,14 @@ function buildGrid(){
       px.addEventListener('mousedown',(e)=>{
         e.preventDefault();
         isDrawing=true;
-        const reg=curRegion();
-        if(e.button===0)drawVal=getPixel(reg,sel,r,c)?0:1;
+        if(e.button===0)drawVal=getPixel(curBlock,sel,r,c)?0:1;
         else if(e.button===2)drawVal=0;
-        saveUndo(reg,sel);
-        setPixel(reg,sel,r,c,drawVal);
+        saveUndo(curBlock,sel);
+        setPixel(curBlock,sel,r,c,drawVal);
         afterEdit();
       });
       px.addEventListener('mouseenter',()=>{
-        if(isDrawing){setPixel(curRegion(),sel,r,c,drawVal);afterEdit();}
+        if(isDrawing){setPixel(curBlock,sel,r,c,drawVal);afterEdit();}
       });
       px.addEventListener('contextmenu',(e)=>e.preventDefault());
       g.appendChild(px);
@@ -418,12 +362,11 @@ function afterEdit(){
 }
 
 function refreshGrid(){
-  const region=curRegion();
   const pxs=document.getElementById('pgrid').children;
-  for(let r=0;r<region.rows;r++){
-    for(let c=0;c<FMT_WIDTH;c++){
-      const idx=r*FMT_WIDTH+c;
-      if(getPixel(region,sel,r,c))pxs[idx].classList.add('on');
+  for(let r=0;r<fmtRows;r++){
+    for(let c=0;c<fmtWidth;c++){
+      const idx=r*fmtWidth+c;
+      if(getPixel(curBlock,sel,r,c))pxs[idx].classList.add('on');
       else pxs[idx].classList.remove('on');
     }
   }
@@ -431,17 +374,15 @@ function refreshGrid(){
 }
 
 function updateHexDisplay(){
-  const region=curRegion();
   const el=document.getElementById('hexdisp');
+  const off=charOffset(curBlock,sel);
   let html='';
-  for(let r=0;r<region.rows;r++){
+  for(let r=0;r<fmtRows;r++){
     let bits='';
-    for(let c=0;c<FMT_WIDTH;c++)bits+=getPixel(region,sel,r,c)?'#':'.';
-    const off=charOffset(region,sel,r);
-    const raw=romBytes[off]||0;
+    for(let c=0;c<fmtWidth;c++)bits+=getPixel(curBlock,sel,r,c)?'#':'.';
+    const raw=romBytes[off+r]||0;
     const hex=raw.toString(16).padStart(2,'0').toUpperCase();
-    const addrLabel='$'+off.toString(16).toUpperCase().padStart(4,'0');
-    html+=`<span class="rl">${String(r).padStart(2,'0')}</span>  <span class="rl">${addrLabel}</span>  <span class="rv">0x${hex}</span>  <span class="rb">${bits}</span>\n`;
+    html+=`<span class="rl">${String(r).padStart(2,'0')}</span>  <span class="rv">0x${hex}</span>  <span class="rb">${bits}</span>\n`;
   }
   el.innerHTML=html;
 }
@@ -451,7 +392,7 @@ function updateMiniGlyph(addr){
   if(!el)return;
   const cv=el.querySelector('canvas');
   if(cv)drawMiniGlyph(cv,addr);
-  if(hasData(curRegion(),addr))el.classList.add('data');
+  if(hasData(addr))el.classList.add('data');
   else el.classList.remove('data');
 }
 
@@ -462,38 +403,36 @@ function selectChar(addr){
   const el=document.getElementById('cc'+addr);
   if(el)el.classList.add('sel');
   document.getElementById('edchar').textContent='$'+addr.toString(16).toUpperCase().padStart(2,'0');
-  const region=curRegion();
-  const regionStart=region.byteOffset.toString(16).toUpperCase().padStart(4,'0');
-  const regionEnd=(region.byteOffset+region.slotCount*SLOT_SIZE-1).toString(16).toUpperCase().padStart(4,'0');
-  const off0=charOffset(region,addr,0).toString(16).toUpperCase().padStart(4,'0');
-  const glyphChar=String.fromCodePoint(CP437_TO_UNICODE[addr]);
-  let info=`Region ${curRegionIdx} (${region.type}, $${regionStart}-$${regionEnd}) | char offset $${off0} | CP437: '${glyphChar}'`;
+  const off=charOffset(curBlock,addr);
+  const blockStart=(curBlock*BLOCK_SIZE).toString(16).toUpperCase().padStart(4,'0');
+  const blockEnd=(curBlock*BLOCK_SIZE+BLOCK_SIZE-1).toString(16).toUpperCase().padStart(4,'0');
+  let info=`Block ${curBlock} ($${blockStart}-$${blockEnd}) | file offset $${off.toString(16).toUpperCase().padStart(4,'0')}-$${(off+fmtRows-1).toString(16).toUpperCase().padStart(4,'0')}`;
+  if(addr>=0x20&&addr<=0x7E)info+=` | ASCII '${String.fromCharCode(addr)}'`;
+  else info+=' | control code';
   document.getElementById('edinfo').textContent=info;
   refreshGrid();
   updateStatus();
 }
 
 function updateStatus(){
-  const region=curRegion();
   let count=0;
-  for(let i=0;i<256;i++)if(hasData(region,i))count++;
+  for(let i=0;i<NUM_ADDRS;i++)if(hasData(i))count++;
   const fileLabel=romFileName?` | File: ${romFileName}`:'';
-  document.getElementById('status').textContent=`${count}/256 glyphs with data in region ${curRegionIdx} | Selected: $${sel.toString(16).toUpperCase().padStart(2,'0')}${fileLabel}`;
+  document.getElementById('status').textContent=`${count}/${NUM_ADDRS} glyphs with data in block ${curBlock} | Selected: $${sel.toString(16).toUpperCase().padStart(2,'0')}${fileLabel}`;
 }
 
 function clearGlyph(){
-  const region=curRegion();
-  saveUndo(region,sel);
-  for(let r=0;r<region.rows;r++)for(let c=0;c<FMT_WIDTH;c++)setPixel(region,sel,r,c,0);
+  saveUndo(curBlock,sel);
+  for(let r=0;r<fmtRows;r++)for(let c=0;c<fmtWidth;c++)setPixel(curBlock,sel,r,c,0);
   afterEdit();
 }
 
 function transformGlyph(fn){
-  const region=curRegion(),W=FMT_WIDTH,H=region.rows;
+  const W=fmtWidth,H=fmtRows;
   const s=[];
-  for(let r=0;r<H;r++){s.push([]);for(let c=0;c<W;c++)s[r].push(getPixel(region,sel,r,c));}
-  saveUndo(region,sel);
-  for(let r=0;r<H;r++)for(let c=0;c<W;c++)setPixel(region,sel,r,c,fn(s,r,c,W,H));
+  for(let r=0;r<H;r++){s.push([]);for(let c=0;c<W;c++)s[r].push(getPixel(curBlock,sel,r,c));}
+  saveUndo(curBlock,sel);
+  for(let r=0;r<H;r++)for(let c=0;c<W;c++)setPixel(curBlock,sel,r,c,fn(s,r,c,W,H));
   afterEdit();
 }
 function invertGlyph(){transformGlyph((s,r,c)=>s[r][c]?0:1);}
@@ -505,14 +444,13 @@ function rotateGlyphDown(){transformGlyph((s,r,c,W,H)=>s[(r-1+H)%H][c]);}
 const GLYPH_CLIP_TYPE='rom-glyph-v1';
 
 function copyGlyph(){
-  const region=curRegion();
   const rows=[];
-  for(let r=0;r<region.rows;r++){
+  for(let r=0;r<fmtRows;r++){
     const row=[];
-    for(let c=0;c<FMT_WIDTH;c++)row.push(getPixel(region,sel,r,c));
+    for(let c=0;c<fmtWidth;c++)row.push(getPixel(curBlock,sel,r,c));
     rows.push(row);
   }
-  const data={type:GLYPH_CLIP_TYPE,w:FMT_WIDTH,h:region.rows,rows};
+  const data={type:GLYPH_CLIP_TYPE,w:fmtWidth,h:fmtRows,rows};
   clipboard=data;
   if(navigator.clipboard)navigator.clipboard.writeText(JSON.stringify(data)).catch(()=>{});
   const s=document.getElementById('copystat');
@@ -530,45 +468,32 @@ async function pasteGlyph(){
     }catch(e){}
   }
   if(!data)return;
-  const region=curRegion();
   let r0=0;
-  if(data.h>region.rows){while(r0<data.h&&data.rows[r0].every(p=>p===0))r0++;}
+  if(data.h>fmtRows){while(r0<data.h&&data.rows[r0].every(p=>p===0))r0++;}
   let c0=0;
-  if(data.w>FMT_WIDTH){cloop:while(c0<data.w){for(let r=r0;r<data.h;r++)if(data.rows[r][c0])break cloop;c0++;}}
-  saveUndo(region,sel);
-  for(let r=0;r<region.rows;r++)
-    for(let c=0;c<FMT_WIDTH;c++){
+  if(data.w>fmtWidth){cloop:while(c0<data.w){for(let r=r0;r<data.h;r++)if(data.rows[r][c0])break cloop;c0++;}}
+  saveUndo(curBlock,sel);
+  for(let r=0;r<fmtRows;r++)
+    for(let c=0;c<fmtWidth;c++){
       const sr=r+r0,sc=c+c0;
-      setPixel(region,sel,r,c,(sr<data.h&&sc<data.w)?data.rows[sr][sc]:0);
+      setPixel(curBlock,sel,r,c,(sr<data.h&&sc<data.w)?data.rows[sr][sc]:0);
     }
   afterEdit();
 }
 
-function setPreviewCols(n){
-  previewCols=n;
-  document.getElementById('col80btn').classList.toggle('cur',n===80);
-  document.getElementById('col40btn').classList.toggle('cur',n===40);
-  renderPreview();
-}
-
 function renderPreview(){
-  const region=curRegion();
-  const BASE_ZOOM_Y=2;
-  const SCANLINES_PER_SCREEN={CGA:200,MDA:350};
-  const ZOOM_Y=Math.max(1,Math.round(BASE_ZOOM_Y*SCANLINES_PER_SCREEN.CGA/SCANLINES_PER_SCREEN[region.type]));
-  const ZOOM_X=previewCols===40?2:1,COL_GAP=0,LINE_GAP=0;
-  const COLS=previewCols;
-  const cellW=FMT_WIDTH+COL_GAP,cellH=region.rows+LINE_GAP;
+  const ZOOM_X=1,ZOOM_Y=2,COL_GAP=0,LINE_GAP=0,COLS=80,MAX_LINES=200;
+  const cellW=fmtWidth+COL_GAP,cellH=fmtRows+LINE_GAP;
   const text=document.getElementById('ptext').value;
   const wrapped=[];
   for(const rawLine of text.split('\n')){
     if(rawLine.length===0){wrapped.push('');continue;}
     for(let i=0;i<rawLine.length;i+=COLS)wrapped.push(rawLine.slice(i,i+COLS));
   }
-  const lineCount=Math.min(wrapped.length,PREVIEW_ROWS);
+  const lineCount=Math.max(1,Math.min(wrapped.length,MAX_LINES));
   const cv=document.getElementById('pcanvas');
   cv.width=COLS*cellW*ZOOM_X;
-  cv.height=PREVIEW_ROWS*cellH*ZOOM_Y;
+  cv.height=lineCount*cellH*ZOOM_Y;
   const canvasOuterWidth=cv.width+2,canvasOuterHeight=cv.height+2;
   cv.style.width=canvasOuterWidth+'px';
   cv.style.height=canvasOuterHeight+'px';
@@ -581,12 +506,12 @@ function renderPreview(){
   for(let li=0;li<lineCount;li++){
     const line=wrapped[li];
     for(let ci=0;ci<line.length;ci++){
-      const code=UNICODE_TO_CP437[line.charCodeAt(ci)];
+      const code=UNICODE_TO_VIDEX[line.charCodeAt(ci)];
       if(code===undefined)continue;
       const ox=ci*cellW*ZOOM_X,oy=li*cellH*ZOOM_Y;
-      for(let r=0;r<region.rows;r++){
-        for(let c=0;c<FMT_WIDTH;c++){
-          if(getPixel(region,code,r,c))ctx.fillRect(ox+c*ZOOM_X,oy+r*ZOOM_Y,ZOOM_X,ZOOM_Y);
+      for(let r=0;r<fmtRows;r++){
+        for(let c=0;c<fmtWidth;c++){
+          if(getPixel(curBlock,code,r,c))ctx.fillRect(ox+c*ZOOM_X,oy+r*ZOOM_Y,ZOOM_X,ZOOM_Y);
         }
       }
     }
@@ -594,17 +519,14 @@ function renderPreview(){
 }
 
 function parseRom(bytes){
-  const numSlots=Math.max(1,Math.ceil(bytes.length/SLOT_SIZE));
-  romBytes=new Uint8Array(numSlots*SLOT_SIZE);
+  numBlocks=Math.max(1,Math.ceil(bytes.length/BLOCK_SIZE));
+  romBytes=new Uint8Array(numBlocks*BLOCK_SIZE);
   romBytes.set(bytes.subarray(0,Math.min(bytes.length,romBytes.length)));
-  slotMode=new Array(numSlots).fill('CGA');
-  computeRegions();
-  curRegionIdx=0;
+  curBlock=0;
   undoStack=[];
   document.getElementById('fileinfo').textContent=
-    `${romFileName||'(unsaved)'}: ${bytes.length} bytes, ${numSlots} block${numSlots>1?'s':''} of $0800 bytes each`;
+    `${romFileName||'(unsaved)'}: ${bytes.length} bytes, ${numBlocks} character set${numBlocks>1?'s':''} of $0800 bytes each`;
   rebuildBlockRow();
-  buildGrid();
   buildCharMap();
   selectChar(sel);
   renderPreview();
@@ -616,8 +538,8 @@ async function loadRom(){
     let handle;
     try{
       [handle]=await window.showOpenFilePicker({
-        id:'ibm-cga-rom-editor',
-        types:[{description:'CGA/MDA Character ROM',accept:{'application/octet-stream':['.bin','.rom']}}]
+        id:'videx-rom-editor',
+        types:[{description:'Videx Character ROM',accept:{'application/octet-stream':['.bin','.rom']}}]
       });
     }catch(err){
       return;
@@ -665,9 +587,9 @@ async function saveRom(){
   if(hasFSAccess){
     try{
       const handle=await window.showSaveFilePicker({
-        id:'ibm-cga-rom-editor',
-        suggestedName:romFileName||'cga_font.bin',
-        types:[{description:'CGA/MDA Character ROM',accept:{'application/octet-stream':['.bin']}}]
+        id:'videx-rom-editor',
+        suggestedName:romFileName||'videx_font.bin',
+        types:[{description:'Videx Character ROM',accept:{'application/octet-stream':['.bin']}}]
       });
       const writable=await handle.createWritable();
       await writable.write(bytes);
@@ -680,7 +602,7 @@ async function saveRom(){
       if(err.name==='AbortError')return;
     }
   }
-  downloadBytes(romFileName||'cga_font.bin',bytes);
+  downloadBytes(romFileName||'videx_font.bin',bytes);
 }
 
 function flashSaved(){
@@ -708,24 +630,24 @@ function download(name,content){
   URL.revokeObjectURL(link.href);
 }
 
-function rowToBitmap(region,addr,r){
+function rowToBitmap(addr,r){
   let s='';
-  for(let c=0;c<FMT_WIDTH;c++)s+=getPixel(region,addr,r,c)?'#':'.';
+  for(let c=0;c<fmtWidth;c++)s+=getPixel(curBlock,addr,r,c)?'#':'.';
   return s;
 }
 
 function exportC(){
-  const region=curRegion();
-  let out=`// IBM CGA/MDA character ROM dump: ${romFileName||'(unsaved)'}\n`;
-  out+=`// Region ${curRegionIdx}: ${region.type}, ${region.rows} rows per character, 8 pixels wide\n`;
-  out+=`// Mirror=${fmtMirror} Invert=${fmtInvert}\n\n`;
+  let out=`// Videx character ROM dump: ${romFileName||'(unsaved)'}\n`;
+  out+=`// ${romBytes.length} bytes, ${numBlocks} set(s) of $0800 bytes, ${NUM_ADDRS} chars x ${CHAR_STRIDE} bytes each\n`;
+  out+=`// Bit format: shift=${fmtShift} width=${fmtWidth} height=${fmtRows} mirror=${fmtMirror} invert=${fmtInvert} (block ${curBlock} shown in comments)\n\n`;
   out+='unsigned char rom_data[] = {\n';
-  for(let addr=0;addr<256;addr++){
+  for(let addr=0;addr<NUM_ADDRS;addr++){
+    const off=charOffset(curBlock,addr);
     out+=`/* $${addr.toString(16).toUpperCase().padStart(2,'0')}\n`;
-    for(let r=0;r<region.rows;r++)out+='   '+rowToBitmap(region,addr,r)+'\n';
+    for(let r=0;r<fmtRows;r++)out+='   '+rowToBitmap(addr,r)+'\n';
     out+='*/\n';
     const bytes=[];
-    for(let r=0;r<region.rows;r++)bytes.push(romBytes[charOffset(region,addr,r)]||0);
+    for(let r=0;r<fmtRows;r++)bytes.push(romBytes[off+r]||0);
     out+='        '+bytes.map(v=>'0x'+v.toString(16).padStart(2,'0').toUpperCase()).join(', ')+',\n';
   }
   out+='};\n';
@@ -733,10 +655,9 @@ function exportC(){
 }
 
 function exportPNG(){
-  const region=curRegion();
   const scale=3;
-  const cols=16,rows=16;
-  const cw=FMT_WIDTH*scale,ch=region.rows*scale;
+  const cols=16,rows=Math.ceil(NUM_ADDRS/16);
+  const cw=fmtWidth*scale,ch=fmtRows*scale;
   const labelH=10;
   const cv=document.createElement('canvas');
   cv.width=cols*(cw+1)+1;
@@ -744,7 +665,7 @@ function exportPNG(){
   const ctx=cv.getContext('2d');
   ctx.fillStyle='#1e1e1e';
   ctx.fillRect(0,0,cv.width,cv.height);
-  for(let addr=0;addr<256;addr++){
+  for(let addr=0;addr<NUM_ADDRS;addr++){
     const col=addr%cols,row=Math.floor(addr/cols);
     const ox=col*(cw+1)+1,oy=row*(ch+labelH+1)+1+labelH;
     ctx.strokeStyle='#333';
@@ -753,73 +674,16 @@ function exportPNG(){
     ctx.font='8px monospace';
     ctx.fillText('$'+addr.toString(16).toUpperCase().padStart(2,'0'),ox,oy-2);
     ctx.fillStyle='#4ec9b0';
-    for(let r=0;r<region.rows;r++){
-      for(let c=0;c<FMT_WIDTH;c++){
-        if(getPixel(region,addr,r,c))ctx.fillRect(ox+c*scale,oy+r*scale,scale,scale);
+    for(let r=0;r<fmtRows;r++){
+      for(let c=0;c<fmtWidth;c++){
+        if(getPixel(curBlock,addr,r,c))ctx.fillRect(ox+c*scale,oy+r*scale,scale,scale);
       }
     }
   }
   const link=document.createElement('a');
-  link.download='rom_charset_region'+curRegionIdx+'.png';
+  link.download='rom_charset_block'+curBlock+'.png';
   link.href=cv.toDataURL('image/png');
   link.click();
-}
-
-function exportRegion(){
-  const region=curRegion();
-  const len=region.slotCount*SLOT_SIZE;
-  const bytes=romBytes.slice(region.byteOffset,region.byteOffset+len);
-  const base=(romFileName||'font').replace(/\.[^.]+$/,'');
-  downloadBytes(`${base}_region${curRegionIdx}_${region.type}.bin`,bytes);
-}
-
-async function importRegion(){
-  if(hasFSAccess){
-    let handle;
-    try{
-      [handle]=await window.showOpenFilePicker({
-        id:'ibm-cga-rom-editor-import',
-        types:[{description:'CGA/MDA Character ROM',accept:{'application/octet-stream':['.bin','.rom']}}]
-      });
-    }catch(err){
-      return;
-    }
-    try{
-      const file=await handle.getFile();
-      const buf=await file.arrayBuffer();
-      applyRegionImport(new Uint8Array(buf));
-    }catch(err){
-      alert('Failed to read font file: '+err.message);
-    }
-  }else{
-    document.getElementById('regionfileinput').click();
-  }
-}
-
-function handleRegionFileInputFallback(e){
-  const file=e.target.files[0];
-  if(!file)return;
-  const reader=new FileReader();
-  reader.onload=function(ev){
-    applyRegionImport(new Uint8Array(ev.target.result));
-  };
-  reader.readAsArrayBuffer(file);
-  e.target.value='';
-}
-
-function applyRegionImport(bytes){
-  const region=curRegion();
-  const expectedLen=region.slotCount*SLOT_SIZE;
-  if(bytes.length!==expectedLen){
-    alert(`Region ${curRegionIdx} is ${region.type} and expects exactly ${expectedLen} bytes (${region.slotCount} block${region.slotCount>1?'s':''} of $0800). The selected file is ${bytes.length} bytes. Import cancelled.`);
-    return;
-  }
-  romBytes.set(bytes,region.byteOffset);
-  undoStack=[];
-  buildCharMap();
-  selectChar(sel);
-  renderPreview();
-  updateStatus();
 }
 
 document.addEventListener('keydown',(e)=>{

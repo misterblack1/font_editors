@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Apple II Character ROM Editor</title>
+<title>Commodore Character ROM Editor</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#1e1e1e;color:#d4d4d4;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;overflow:hidden;height:100vh}
@@ -14,7 +14,7 @@ button.sec:hover{background:#4a4a4a}
 button.warn{background:#6a3a1a}
 button.warn:hover{background:#8a4a2a}
 button.tiny{font-size:9px;padding:3px 6px}
-button.block{background:#3a3a3a;margin-bottom:2px}
+button.block{background:#3a3a3a;flex:1;text-align:left}
 button.block.cur{background:#0e639c}
 .sep{width:1px;height:22px;background:#3e3e3e;margin:0 2px}
 #status{margin-left:auto;color:#888;font-size:11px}
@@ -23,10 +23,9 @@ button.block.cur{background:#0e639c}
 #sidebar h3{margin:10px 0 6px;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px}
 #sidebar h3:first-child{margin-top:0}
 #fileinfo{font-size:11px;color:#9cdcfe;line-height:1.5;word-break:break-all}
-#blockrow{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+#blockrow{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.blockwrap{display:flex;gap:4px;align-items:center}
 .fmtrow{display:flex;gap:10px;align-items:center;margin-top:6px;font-size:11px;flex-wrap:wrap}
-.fmtrow select{background:#1e1e1e;color:#d4d4d4;border:1px solid #3e3e3e;font-size:11px}
-.fmtrow.presets{gap:4px}
 .cg{display:grid;grid-template-columns:repeat(16,1fr);gap:2px;justify-content:start}
 .cc{display:flex;align-items:center;justify-content:center;cursor:pointer;background:#1a1a1a}
 .cc:hover{outline:1px solid #0e639c}
@@ -39,16 +38,18 @@ button.block.cur{background:#0e639c}
 .ehdr .ch{font-size:28px;font-weight:bold;color:#4ec9b0}
 .ehdr .info{color:#888;font-size:12px;margin-top:2px;text-align:center}
 #pgrid{display:grid;gap:1px;background:#444;border:2px solid #444;margin-top:8px}
-.px{width:40px;height:34px;background:#2a2a2a;cursor:crosshair;transition:background .05s}
+.px{width:40px;height:40px;background:#2a2a2a;cursor:crosshair;transition:background .05s}
 .px.on{background:#4ec9b0}
 .px:hover{outline:2px solid #fff;outline-offset:-2px}
 .hxd{margin-top:10px;font-family:'Consolas','Courier New',monospace;font-size:12px;color:#9cdcfe;text-align:left;line-height:1.7;white-space:pre}
 .hxd .rl{color:#555}
 .hxd .rv{color:#9cdcfe}
 .hxd .rb{color:#666}
-#prevpan{width:560px;min-width:560px;background:#252526;border-left:1px solid #3e3e3e;display:flex;flex-direction:column;padding:6px;overflow:hidden}
+#prevpan{width:760px;min-width:760px;background:#252526;border-left:1px solid #3e3e3e;display:flex;flex-direction:column;padding:6px;overflow:hidden}
 #prevpan h3{margin-bottom:4px;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px}
-#ptext{background:#1e1e1e;color:#d4d4d4;border:1px solid #3e3e3e;font-family:'Consolas',monospace;font-size:11px;padding:4px;resize:vertical;margin-bottom:4px}
+.colmode{display:flex;gap:4px;margin-bottom:6px}
+.coltoggle.cur{background:#0e639c}
+#ptext{background:#1e1e1e;color:#d4d4d4;border:1px solid #3e3e3e;font-family:'Cascadia Mono','Cascadia Code','Consolas',monospace;font-size:11px;padding:4px;resize:vertical;margin-bottom:4px}
 #pcanvas{border:1px solid #3e3e3e;background:#000;display:block;image-rendering:pixelated}
 .copystat{font-size:11px;color:#4ec9b0;padding:2px 6px;background:#1a2a2a;border-radius:2px;display:none}
 .copystat.show{display:inline}
@@ -65,46 +66,34 @@ button.block.cur{background:#0e639c}
   <div class="sep"></div>
   <button class="sec" onclick="exportC()">Export C</button>
   <button class="sec" onclick="exportPNG()">Export PNG</button>
+  <button class="sec" onclick="exportBlock()">Export Set (.bin)</button>
+  <div class="sep"></div>
+  <button class="sec" onclick="importBlock()">Import Set (.bin)</button>
   <span class="copystat" id="copystat">Copied!</span>
   <span id="status"></span>
 </div>
 
 <div id="main">
   <div id="sidebar">
-    <h3>ROM Format</h3>
+    <h3>ROM Info</h3>
     <div id="fileinfo">No file loaded (blank 2048-byte buffer)</div>
     <div id="blockrow"></div>
-    <div class="fmtrow">
-      <label>Bit shift
-        <select id="fmtShift" onchange="onFormatChange()">
-          <option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option>
-        </select>
-      </label>
-      <label>Width
-        <select id="fmtWidth" onchange="onWidthChange()">
-          <option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option>
-        </select>
-      </label>
-    </div>
     <div class="fmtrow">
       <label><input type="checkbox" id="fmtMirror" onchange="onFormatChange()"> Mirror columns</label>
       <label><input type="checkbox" id="fmtInvert" onchange="onFormatChange()"> Invert bits</label>
     </div>
-    <div class="fmtrow presets">
-      <button class="sec tiny" onclick="applyPreset(3,5,true,false)">Clone (sh3 mirror)</button>
-      <button class="sec tiny" onclick="applyPreset(1,5,false,false)">II/II+ (sh1)</button>
-      <button class="sec tiny" onclick="applyPreset(1,5,true,true)">IIc/IIe (sh1 mirror inv)</button>
-    </div>
     <h3>Characters ($00-$FF)</h3>
     <div class="cg" id="chargrid"></div>
     <div class="note">
-      <p>8 bytes per character. Shift/Width/Mirror/Invert control how bits map to pixels. Different Apple II ROM families pack them differently, use the presets as a starting point. Unused bits are left alone. Only edited pixels change on save.</p>
+      <p>All CBM ROMs (PET, VIC-20, C64, C16, C128): shift=0, width=8, MSB-first.</p>
+      <p>Uppercase/graphics set layout: $00=@, $01-$1A=A-Z, $20-$3F=space-?, $40-$7F=graphics, $80-$FF=reverse video. On C64/VIC-20 the second set has lowercase at $41-$5A.</p>
+      <p>Export/Import operate on the current 2KB set only. Mirror/Invert are for non-standard clone ROMs.</p>
     </div>
   </div>
   <div id="edpan">
     <div class="ehdr">
-      <div class="ch" id="edchar">$41</div>
-      <div class="info" id="edinfo">Block 0 ($0000-$07FF) | file offset $0008-$000F</div>
+      <div class="ch" id="edchar">$01</div>
+      <div class="info" id="edinfo">Set 0 ($0000-$07FF) | file offset $0008-$000F | screen 'A'</div>
     </div>
     <div id="pgrid"></div>
     <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;width:100%;max-width:360px">
@@ -125,49 +114,103 @@ button.block.cur{background:#0e639c}
     <div class="hxd" id="hexdisp"></div>
   </div>
   <div id="prevpan">
-    <h3>Live Preview (normal-mode text: address = char code | $80)</h3>
-    <textarea id="ptext" rows="10" spellcheck="false">THE QUICK BROWN FOX JUMPS
-OVER THE LAZY DOG!
-
-ADRIAN'S DIGITAL BASEMENT
-
-0123456789 .,:;?!@#$%^&amp;*()[]
-/\&lt;&gt;=+-_
-ABCDEFGHIJKLMNOPQRSTUVWXYZ</textarea>
-    <canvas id="pcanvas" width="720" height="576"></canvas>
+    <h3>Live Preview (Commodore screen codes)</h3>
+    <div class="colmode">
+      <button id="col40btn" class="sec tiny coltoggle cur" onclick="setPreviewCols(40)">40 Column</button>
+      <button id="col80btn" class="sec tiny coltoggle" onclick="setPreviewCols(80)">80 Column</button>
+    </div>
+    <textarea id="ptext" rows="20" spellcheck="false"></textarea>
+    <canvas id="pcanvas"></canvas>
   </div>
 </div>
 
 <input type="file" id="fileinput" accept=".bin,.rom" style="display:none">
+<input type="file" id="blockfileinput" accept=".bin,.rom" style="display:none">
 
 <script>
-const CHAR_BYTES=8, BLOCK_SIZE=256*CHAR_BYTES, ROWS=8;
+const NUM_CHARS=256, CHAR_ROWS=8, FMT_WIDTH=8, BLOCK_SIZE=NUM_CHARS*CHAR_ROWS;
 let romBytes=new Uint8Array(BLOCK_SIZE);
 let numBlocks=1, curBlock=0;
-let sel=0x41;
+let fmtMirror=false, fmtInvert=false;
+let sel=0x01;
 let clipboard=null;
-let isDrawing=false,drawVal=1;
+let isDrawing=false, drawVal=1;
 let undoStack=[];
 const MAX_UNDO=50;
 let romFileHandle=null, romFileName=null;
+let previewCols=40;
+const PREVIEW_ROWS=20;
 const hasFSAccess='showOpenFilePicker' in window;
 
-let fmtShift=0, fmtWidth=7, fmtMirror=true, fmtInvert=false;
+// Maps Unicode codepoint → Commodore screen code (= ROM char index)
+// Standard PETSCII → screen code mapping for uppercase/graphics set
+const UNICODE_TO_CBM={};
+for(let c=0x20;c<=0x3F;c++)UNICODE_TO_CBM[c]=c;   // space through ?  (direct)
+UNICODE_TO_CBM[0x40]=0x00;                          // @ → $00
+for(let c=0x41;c<=0x5A;c++)UNICODE_TO_CBM[c]=c-0x40; // A-Z → $01-$1A
+UNICODE_TO_CBM[0x5B]=0x1B;                          // [
+UNICODE_TO_CBM[0xA3]=0x1C;                          // £
+UNICODE_TO_CBM[0x5D]=0x1D;                          // ]
+UNICODE_TO_CBM[0x5E]=0x1E;                          // ^ (↑ in PETSCII)
+UNICODE_TO_CBM[0x5F]=0x1F;                          // _ (← in PETSCII)
+for(let c=0x61;c<=0x7A;c++)UNICODE_TO_CBM[c]=c-0x60; // a-z → $01-$1A (same as uppercase A-Z in PETSCII)
+// Commodore graphics characters $40-$5F
+UNICODE_TO_CBM[0x2550]=0x40; // ═ horizontal double bar (middle rows)
+UNICODE_TO_CBM[0x2660]=0x41; // ♠ spades
+UNICODE_TO_CBM[0x2502]=0x42; // │ vertical line
+UNICODE_TO_CBM[0x2500]=0x43; // ─ horizontal line (variant)
+UNICODE_TO_CBM[0x2580]=0x45; // ▀ upper half block
+UNICODE_TO_CBM[0x2584]=0x46; // ▄ lower half block
+UNICODE_TO_CBM[0x258F]=0x47; // ▏ left thin vertical
+UNICODE_TO_CBM[0x2595]=0x48; // ▕ right thin vertical
+UNICODE_TO_CBM[0x256E]=0x49; // ╮ top-right corner
+UNICODE_TO_CBM[0x2570]=0x4A; // ╰ bottom-left corner
+UNICODE_TO_CBM[0x256F]=0x4B; // ╯ bottom-right corner
+UNICODE_TO_CBM[0x2572]=0x4D; // ╲ diagonal
+UNICODE_TO_CBM[0x2571]=0x4E; // ╱ diagonal
+UNICODE_TO_CBM[0x258C]=0x4F; // ▌ left block (top rows)
+UNICODE_TO_CBM[0x2590]=0x50; // ▐ right block (top rows)
+UNICODE_TO_CBM[0x25CF]=0x51; // ● filled oval
+UNICODE_TO_CBM[0x2581]=0x52; // ▁ lower bar
+UNICODE_TO_CBM[0x2665]=0x53; // ♥ hearts
+UNICODE_TO_CBM[0x258E]=0x54; // ▎ left thin line
+UNICODE_TO_CBM[0x256D]=0x55; // ╭ top-left corner
+UNICODE_TO_CBM[0x2573]=0x56; // ╳ cross diagonal
+UNICODE_TO_CBM[0x25CB]=0x57; // ○ open circle
+UNICODE_TO_CBM[0x2663]=0x58; // ♣ clubs
+UNICODE_TO_CBM[0x2666]=0x5A; // ♦ diamonds
+UNICODE_TO_CBM[0x253C]=0x5B; // ┼ crosshair
+UNICODE_TO_CBM[0x03C0]=0x5E; // π pi
+UNICODE_TO_CBM[0x25E4]=0x5F; // ◤ top-left triangle
+// Commodore graphics $60-$7F (geometric block elements)
+UNICODE_TO_CBM[0x258D]=0x61; // ▍ left 4-col block
+UNICODE_TO_CBM[0x2583]=0x62; // ▃ lower half (rows 4-7)
+UNICODE_TO_CBM[0x2594]=0x63; // ▔ upper one-eighth (row 0)
+UNICODE_TO_CBM[0x2581]=0x64; // ▁ lower one-eighth (row 7) - same Unicode as $52 above, this one loses
+UNICODE_TO_CBM[0x2524]=0x6B; // ┤ right junction
+UNICODE_TO_CBM[0x251C]=0x6E; // ├ left junction
+UNICODE_TO_CBM[0x2534]=0x71; // ┴ bottom junction
+UNICODE_TO_CBM[0x252C]=0x72; // ┬ top junction
+UNICODE_TO_CBM[0x2596]=0x7B; // ▖ lower-left quadrant
+UNICODE_TO_CBM[0x2597]=0x7C; // ▗ lower-right quadrant
+UNICODE_TO_CBM[0x2598]=0x7E; // ▘ upper-left quadrant
+UNICODE_TO_CBM[0x259E]=0x7F; // ▞ diagonal quadrants
+// Upper 128 ($80-$FF) are reverse-video versions of $00-$7F; not shown in preview.
 
-function charOffset(block,addr){return block*BLOCK_SIZE+addr*CHAR_BYTES;}
+function charOffset(block,addr){return block*BLOCK_SIZE+addr*CHAR_ROWS;}
 
 function getPixel(block,addr,r,c){
   const off=charOffset(block,addr)+r;
   const byte=romBytes[off]||0;
   const v=fmtInvert?(~byte&0xFF):byte;
-  const bitInV=fmtMirror?c:(fmtWidth-1-c);
-  return (v>>(fmtShift+bitInV))&1;
+  const bitInV=fmtMirror?c:(FMT_WIDTH-1-c);
+  return (v>>bitInV)&1;
 }
 
 function setPixel(block,addr,r,c,on){
   const off=charOffset(block,addr)+r;
-  const bitInV=fmtMirror?c:(fmtWidth-1-c);
-  const bitPos=fmtShift+bitInV;
+  const bitInV=fmtMirror?c:(FMT_WIDTH-1-c);
+  const bitPos=bitInV;
   const desired=fmtInvert?(on?0:1):(on?1:0);
   let byte=romBytes[off]||0;
   if(desired)byte|=(1<<bitPos); else byte&=~(1<<bitPos);
@@ -175,13 +218,13 @@ function setPixel(block,addr,r,c,on){
 }
 
 function hasData(addr){
-  for(let r=0;r<ROWS;r++)for(let c=0;c<fmtWidth;c++)if(getPixel(curBlock,addr,r,c))return true;
+  for(let r=0;r<CHAR_ROWS;r++)for(let c=0;c<FMT_WIDTH;c++)if(getPixel(curBlock,addr,r,c))return true;
   return false;
 }
 
 function saveUndo(block,addr){
   const off=charOffset(block,addr);
-  undoStack.push({block,addr,bytes:romBytes.slice(off,off+CHAR_BYTES)});
+  undoStack.push({block,addr,bytes:romBytes.slice(off,off+CHAR_ROWS)});
   if(undoStack.length>MAX_UNDO)undoStack.shift();
 }
 
@@ -196,11 +239,18 @@ function undo(){
   renderPreview();
 }
 
+function buildDefaultText(){
+  // Graphics chars $40-$5F (using mapped Unicode)
+  const g1='\u2550\u2660\u2502\u2500\u2580\u2584\u258F\u2595\u256E\u2570\u256F\u2572\u2571\u258C\u2590\u25CF\u2581\u2665\u258E\u256D\u2573\u25CB\u2663\u2666\u253C\u03C0\u25E4';
+  // Graphics chars $60-$7F (block elements)
+  const g2='\u258D\u2583\u2594\u2524\u251C\u2534\u252C\u2596\u2597\u2598\u259E';
+  return 'THE QUICK BROWN FOX JUMPS\nOVER THE LAZY DOG!\n\nAdrian\'s Digital Basement\n\n0123456789 .,:;?!@#$%^&*()[]\n/\\<>=+-\nABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n\n'+g1+'\n'+g2;
+}
+
 function init(){
-  document.getElementById('fmtShift').value=fmtShift;
-  document.getElementById('fmtWidth').value=fmtWidth;
   document.getElementById('fmtMirror').checked=fmtMirror;
   document.getElementById('fmtInvert').checked=fmtInvert;
+  document.getElementById('ptext').value=buildDefaultText();
   rebuildBlockRow();
   buildCharMap();
   buildGrid();
@@ -208,26 +258,14 @@ function init(){
   renderPreview();
   document.getElementById('ptext').addEventListener('input',renderPreview);
   document.getElementById('fileinput').addEventListener('change',handleFileInputFallback);
+  document.getElementById('blockfileinput').addEventListener('change',handleBlockFileInputFallback);
   document.addEventListener('mouseup',()=>{isDrawing=false});
   if(!hasFSAccess){
-    document.getElementById('status').textContent='File System Access API not supported in this browser; using manual download/upload.';
+    document.getElementById('status').textContent='File System Access API not supported; using manual download/upload.';
   }
 }
 
-function applyPreset(shift,width,mirror,invert){
-  fmtShift=shift;fmtWidth=width;fmtMirror=mirror;fmtInvert=invert;
-  document.getElementById('fmtShift').value=shift;
-  document.getElementById('fmtWidth').value=width;
-  document.getElementById('fmtMirror').checked=mirror;
-  document.getElementById('fmtInvert').checked=invert;
-  buildGrid();
-  buildCharMap();
-  selectChar(sel);
-  renderPreview();
-}
-
 function onFormatChange(){
-  fmtShift=parseInt(document.getElementById('fmtShift').value);
   fmtMirror=document.getElementById('fmtMirror').checked;
   fmtInvert=document.getElementById('fmtInvert').checked;
   buildCharMap();
@@ -235,50 +273,43 @@ function onFormatChange(){
   renderPreview();
 }
 
-function onWidthChange(){
-  fmtWidth=parseInt(document.getElementById('fmtWidth').value);
-  buildGrid();
-  buildCharMap();
-  refreshGrid();
-  renderPreview();
-}
-
 function rebuildBlockRow(){
-  numBlocks=Math.ceil(romBytes.length/BLOCK_SIZE);
+  numBlocks=Math.max(1,Math.ceil(romBytes.length/BLOCK_SIZE));
   const row=document.getElementById('blockrow');
   row.innerHTML='';
   if(numBlocks<=1)return;
   for(let b=0;b<numBlocks;b++){
+    const wrap=document.createElement('div');
+    wrap.className='blockwrap';
     const btn=document.createElement('button');
     btn.className='block'+(b===curBlock?' cur':'');
     const startAddr=(b*BLOCK_SIZE).toString(16).toUpperCase().padStart(4,'0');
-    btn.textContent=`Set ${b} ($${startAddr})`;
-    btn.onclick=()=>{curBlock=b;rebuildBlockRow();buildCharMap();selectChar(sel);renderPreview();};
-    row.appendChild(btn);
+    const endAddr=(b*BLOCK_SIZE+BLOCK_SIZE-1).toString(16).toUpperCase().padStart(4,'0');
+    btn.textContent=`Set ${b} ($${startAddr}-$${endAddr})`;
+    btn.onclick=(()=>{const bi=b;return ()=>{curBlock=bi;rebuildBlockRow();buildCharMap();selectChar(sel);renderPreview();};})();
+    wrap.appendChild(btn);
+    row.appendChild(wrap);
   }
 }
 
 const CHARGRID_COLS=16, CHARGRID_GAP=2, SIDEBAR_INNER=320-16;
-let miniScale=3;
-
-function computeMiniScale(){
+const MINI_SCALE=(()=>{
   const avail=SIDEBAR_INNER-(CHARGRID_COLS-1)*CHARGRID_GAP;
-  const perCol=avail/CHARGRID_COLS;
-  miniScale=Math.max(1,Math.floor(perCol/fmtWidth));
-}
+  return Math.max(1,Math.floor((avail/CHARGRID_COLS)/FMT_WIDTH));
+})();
 
 function buildCharMap(){
-  computeMiniScale();
   const g=document.getElementById('chargrid');
   g.innerHTML='';
-  for(let addr=0;addr<256;addr++){
+  for(let addr=0;addr<NUM_CHARS;addr++){
     const d=document.createElement('div');
     d.className='cc'+(hasData(addr)?' data':'');
     d.id='cc'+addr;
     d.title='$'+addr.toString(16).toUpperCase().padStart(2,'0');
-    d.onclick=()=>selectChar(addr);
+    d.onclick=(()=>{const a=addr;return ()=>selectChar(a);})();
     const cv=document.createElement('canvas');
-    cv.width=fmtWidth*miniScale;cv.height=ROWS*miniScale;
+    cv.width=FMT_WIDTH*MINI_SCALE;
+    cv.height=CHAR_ROWS*MINI_SCALE;
     d.appendChild(cv);
     g.appendChild(d);
     drawMiniGlyph(cv,addr);
@@ -291,26 +322,21 @@ function drawMiniGlyph(cv,addr){
   ctx.fillStyle='#1e1e1e';
   ctx.fillRect(0,0,cv.width,cv.height);
   ctx.fillStyle='#4ec9b0';
-  for(let r=0;r<ROWS;r++){
-    for(let c=0;c<fmtWidth;c++){
-      if(getPixel(curBlock,addr,r,c)){
-        ctx.fillRect(c*miniScale,r*miniScale,miniScale,miniScale);
-      }
-    }
-  }
+  for(let r=0;r<CHAR_ROWS;r++)
+    for(let c=0;c<FMT_WIDTH;c++)
+      if(getPixel(curBlock,addr,r,c))
+        ctx.fillRect(c*MINI_SCALE,r*MINI_SCALE,MINI_SCALE,MINI_SCALE);
 }
 
 function buildGrid(){
   const g=document.getElementById('pgrid');
-  g.style.gridTemplateColumns=`repeat(${fmtWidth},40px)`;
-  g.style.gridTemplateRows=`repeat(${ROWS},34px)`;
+  g.style.gridTemplateColumns=`repeat(${FMT_WIDTH},40px)`;
+  g.style.gridTemplateRows=`repeat(${CHAR_ROWS},40px)`;
   g.innerHTML='';
-  for(let r=0;r<ROWS;r++){
-    for(let c=0;c<fmtWidth;c++){
+  for(let r=0;r<CHAR_ROWS;r++){
+    for(let c=0;c<FMT_WIDTH;c++){
       const px=document.createElement('div');
       px.className='px';
-      px.dataset.r=r;
-      px.dataset.c=c;
       px.addEventListener('mousedown',(e)=>{
         e.preventDefault();
         isDrawing=true;
@@ -338,13 +364,12 @@ function afterEdit(){
 
 function refreshGrid(){
   const pxs=document.getElementById('pgrid').children;
-  for(let r=0;r<ROWS;r++){
-    for(let c=0;c<fmtWidth;c++){
-      const idx=r*fmtWidth+c;
+  for(let r=0;r<CHAR_ROWS;r++)
+    for(let c=0;c<FMT_WIDTH;c++){
+      const idx=r*FMT_WIDTH+c;
       if(getPixel(curBlock,sel,r,c))pxs[idx].classList.add('on');
       else pxs[idx].classList.remove('on');
     }
-  }
   updateHexDisplay();
 }
 
@@ -352,9 +377,9 @@ function updateHexDisplay(){
   const el=document.getElementById('hexdisp');
   const off=charOffset(curBlock,sel);
   let html='';
-  for(let r=0;r<ROWS;r++){
+  for(let r=0;r<CHAR_ROWS;r++){
     let bits='';
-    for(let c=0;c<fmtWidth;c++)bits+=getPixel(curBlock,sel,r,c)?'#':'.';
+    for(let c=0;c<FMT_WIDTH;c++)bits+=getPixel(curBlock,sel,r,c)?'#':'.';
     const raw=romBytes[off+r]||0;
     const hex=raw.toString(16).padStart(2,'0').toUpperCase();
     html+=`<span class="rl">${String(r).padStart(2,'0')}</span>  <span class="rv">0x${hex}</span>  <span class="rb">${bits}</span>\n`;
@@ -376,14 +401,17 @@ function selectChar(addr){
   if(old)old.classList.remove('sel');
   sel=addr;
   const el=document.getElementById('cc'+addr);
-  if(el)el.classList.add('sel');
+  if(el){el.classList.add('sel');el.scrollIntoView({block:'nearest'});}
   document.getElementById('edchar').textContent='$'+addr.toString(16).toUpperCase().padStart(2,'0');
   const off=charOffset(curBlock,addr);
-  const blockStart=(curBlock*BLOCK_SIZE).toString(16).toUpperCase().padStart(4,'0');
-  const blockEnd=(curBlock*BLOCK_SIZE+BLOCK_SIZE-1).toString(16).toUpperCase().padStart(4,'0');
-  let info=`Block ${curBlock} ($${blockStart}-$${blockEnd}) | file offset $${off.toString(16).toUpperCase().padStart(4,'0')}-$${(off+7).toString(16).toUpperCase().padStart(4,'0')}`;
-  if(addr>=0x20&&addr<=0x7E)info+=` | as ASCII: '${String.fromCharCode(addr)}'`;
-  else if(addr>=0xA0&&addr<=0xFE)info+=` | normal-mode ASCII: '${String.fromCharCode(addr&0x7F)}'`;
+  const setStart=(curBlock*BLOCK_SIZE).toString(16).toUpperCase().padStart(4,'0');
+  const setEnd=(curBlock*BLOCK_SIZE+BLOCK_SIZE-1).toString(16).toUpperCase().padStart(4,'0');
+  let info=`Set ${curBlock} ($${setStart}-$${setEnd}) | file offset $${off.toString(16).toUpperCase().padStart(4,'0')}-$${(off+CHAR_ROWS-1).toString(16).toUpperCase().padStart(4,'0')}`;
+  if(addr===0x00)info+=" | screen '@'";
+  else if(addr>=0x01&&addr<=0x1A)info+=` | screen '${String.fromCharCode(addr+0x40)}'`;
+  else if(addr>=0x20&&addr<=0x3F)info+=` | screen '${String.fromCharCode(addr)}'`;
+  else if(addr>=0x41&&addr<=0x5A)info+=` | screen '${String.fromCharCode(addr+0x20)}'`;
+  else info+=' | graphic/control';
   document.getElementById('edinfo').textContent=info;
   refreshGrid();
   updateStatus();
@@ -391,19 +419,19 @@ function selectChar(addr){
 
 function updateStatus(){
   let count=0;
-  for(let i=0;i<256;i++)if(hasData(i))count++;
+  for(let i=0;i<NUM_CHARS;i++)if(hasData(i))count++;
   const fileLabel=romFileName?` | File: ${romFileName}`:'';
-  document.getElementById('status').textContent=`${count}/256 glyphs with data in block ${curBlock} | Selected: $${sel.toString(16).toUpperCase().padStart(2,'0')}${fileLabel}`;
+  document.getElementById('status').textContent=`${count}/${NUM_CHARS} glyphs with data in set ${curBlock} | Selected: $${sel.toString(16).toUpperCase().padStart(2,'0')}${fileLabel}`;
 }
 
 function clearGlyph(){
   saveUndo(curBlock,sel);
-  for(let r=0;r<ROWS;r++)for(let c=0;c<fmtWidth;c++)setPixel(curBlock,sel,r,c,0);
+  for(let r=0;r<CHAR_ROWS;r++)for(let c=0;c<FMT_WIDTH;c++)setPixel(curBlock,sel,r,c,0);
   afterEdit();
 }
 
 function transformGlyph(fn){
-  const W=fmtWidth,H=ROWS;
+  const W=FMT_WIDTH,H=CHAR_ROWS;
   const s=[];
   for(let r=0;r<H;r++){s.push([]);for(let c=0;c<W;c++)s[r].push(getPixel(curBlock,sel,r,c));}
   saveUndo(curBlock,sel);
@@ -420,12 +448,12 @@ const GLYPH_CLIP_TYPE='rom-glyph-v1';
 
 function copyGlyph(){
   const rows=[];
-  for(let r=0;r<ROWS;r++){
+  for(let r=0;r<CHAR_ROWS;r++){
     const row=[];
-    for(let c=0;c<fmtWidth;c++)row.push(getPixel(curBlock,sel,r,c));
+    for(let c=0;c<FMT_WIDTH;c++)row.push(getPixel(curBlock,sel,r,c));
     rows.push(row);
   }
-  const data={type:GLYPH_CLIP_TYPE,w:fmtWidth,h:ROWS,rows};
+  const data={type:GLYPH_CLIP_TYPE,w:FMT_WIDTH,h:CHAR_ROWS,rows};
   clipboard=data;
   if(navigator.clipboard)navigator.clipboard.writeText(JSON.stringify(data)).catch(()=>{});
   const s=document.getElementById('copystat');
@@ -444,33 +472,40 @@ async function pasteGlyph(){
   }
   if(!data)return;
   let r0=0;
-  if(data.h>ROWS){while(r0<data.h&&data.rows[r0].every(p=>p===0))r0++;}
+  if(data.h>CHAR_ROWS){while(r0<data.h&&data.rows[r0].every(p=>p===0))r0++;}
   let c0=0;
-  if(data.w>fmtWidth){cloop:while(c0<data.w){for(let r=r0;r<data.h;r++)if(data.rows[r][c0])break cloop;c0++;}}
+  if(data.w>FMT_WIDTH){cloop:while(c0<data.w){for(let r=r0;r<data.h;r++)if(data.rows[r][c0])break cloop;c0++;}}
   saveUndo(curBlock,sel);
-  for(let r=0;r<ROWS;r++)
-    for(let c=0;c<fmtWidth;c++){
+  for(let r=0;r<CHAR_ROWS;r++)
+    for(let c=0;c<FMT_WIDTH;c++){
       const sr=r+r0,sc=c+c0;
       setPixel(curBlock,sel,r,c,(sr<data.h&&sc<data.w)?data.rows[sr][sc]:0);
     }
   afterEdit();
 }
 
+function setPreviewCols(n){
+  previewCols=n;
+  document.getElementById('col40btn').classList.toggle('cur',n===40);
+  document.getElementById('col80btn').classList.toggle('cur',n===80);
+  renderPreview();
+}
+
 function renderPreview(){
-  const ZOOM=2,COL_GAP=1,LINE_GAP=1,COLS=30,MAX_LINES=200;
-  const cellW=fmtWidth+COL_GAP,cellH=ROWS+LINE_GAP;
+  const ZOOM_X=previewCols===40?2:1, ZOOM_Y=2, COL_GAP=0, LINE_GAP=0;
+  const COLS=previewCols;
+  const cellW=FMT_WIDTH+COL_GAP, cellH=CHAR_ROWS+LINE_GAP;
   const text=document.getElementById('ptext').value;
   const wrapped=[];
   for(const rawLine of text.split('\n')){
     if(rawLine.length===0){wrapped.push('');continue;}
     for(let i=0;i<rawLine.length;i+=COLS)wrapped.push(rawLine.slice(i,i+COLS));
   }
-  const lineCount=Math.max(1,Math.min(wrapped.length,MAX_LINES));
+  const lineCount=Math.min(wrapped.length,PREVIEW_ROWS);
   const cv=document.getElementById('pcanvas');
-  cv.width=COLS*cellW*ZOOM;
-  cv.height=lineCount*cellH*ZOOM;
-  // +2 accounts for the canvas's own 1px border (border-box sizing)
-  const canvasOuterWidth=cv.width+2,canvasOuterHeight=cv.height+2;
+  cv.width=COLS*cellW*ZOOM_X;
+  cv.height=PREVIEW_ROWS*cellH*ZOOM_Y;
+  const canvasOuterWidth=cv.width+2, canvasOuterHeight=cv.height+2;
   cv.style.width=canvasOuterWidth+'px';
   cv.style.height=canvasOuterHeight+'px';
   document.getElementById('ptext').style.width=canvasOuterWidth+'px';
@@ -482,15 +517,12 @@ function renderPreview(){
   for(let li=0;li<lineCount;li++){
     const line=wrapped[li];
     for(let ci=0;ci<line.length;ci++){
-      const raw=line.charCodeAt(ci);
-      if(raw<0||raw>0x7F)continue;
-      const code=raw|0x80; // normal (non-inverse, non-flash) Apple II display bank starts at $80
-      const ox=ci*cellW*ZOOM,oy=li*cellH*ZOOM;
-      for(let r=0;r<ROWS;r++){
-        for(let c=0;c<fmtWidth;c++){
-          if(getPixel(curBlock,code,r,c))ctx.fillRect(ox+c*ZOOM,oy+r*ZOOM,ZOOM,ZOOM);
-        }
-      }
+      const code=UNICODE_TO_CBM[line.charCodeAt(ci)];
+      if(code===undefined)continue;
+      const ox=ci*cellW*ZOOM_X, oy=li*cellH*ZOOM_Y;
+      for(let r=0;r<CHAR_ROWS;r++)
+        for(let c=0;c<FMT_WIDTH;c++)
+          if(getPixel(curBlock,code,r,c))ctx.fillRect(ox+c*ZOOM_X,oy+r*ZOOM_Y,ZOOM_X,ZOOM_Y);
     }
   }
 }
@@ -502,7 +534,7 @@ function parseRom(bytes){
   curBlock=0;
   undoStack=[];
   document.getElementById('fileinfo').textContent=
-    `${romFileName||'(unsaved)'}: ${bytes.length} bytes, ${numBlocks} character set${numBlocks>1?'s':''} of $0800 bytes each`;
+    `${romFileName||'(unsaved)'}: ${bytes.length} bytes, ${numBlocks} set${numBlocks>1?'s':''} of $0800 bytes each`;
   rebuildBlockRow();
   buildCharMap();
   selectChar(sel);
@@ -515,21 +547,17 @@ async function loadRom(){
     let handle;
     try{
       [handle]=await window.showOpenFilePicker({
-        id:'apple2-rom-editor',
-        types:[{description:'Apple II Character ROM',accept:{'application/octet-stream':['.bin','.rom']}}]
+        id:'cbm-rom-editor',
+        types:[{description:'Commodore Character ROM',accept:{'application/octet-stream':['.bin','.rom']}}]
       });
-    }catch(err){
-      return;
-    }
+    }catch(err){return;}
     try{
       const file=await handle.getFile();
       const buf=await file.arrayBuffer();
       romFileHandle=handle;
       romFileName=file.name;
       parseRom(new Uint8Array(buf));
-    }catch(err){
-      alert('Failed to read ROM file: '+err.message);
-    }
+    }catch(err){alert('Failed to read ROM file: '+err.message);}
   }else{
     document.getElementById('fileinput').click();
   }
@@ -539,11 +567,7 @@ function handleFileInputFallback(e){
   const file=e.target.files[0];
   if(!file)return;
   const reader=new FileReader();
-  reader.onload=function(ev){
-    romFileHandle=null;
-    romFileName=file.name;
-    parseRom(new Uint8Array(ev.target.result));
-  };
+  reader.onload=ev=>{romFileHandle=null;romFileName=file.name;parseRom(new Uint8Array(ev.target.result));};
   reader.readAsArrayBuffer(file);
   e.target.value='';
 }
@@ -552,80 +576,112 @@ async function saveRom(){
   const bytes=romBytes;
   if(romFileHandle){
     try{
-      const writable=await romFileHandle.createWritable();
-      await writable.write(bytes);
-      await writable.close();
-      flashSaved();
-      return;
-    }catch(err){
-      alert('Could not write directly to the file, falling back to download.\n'+err.message);
-    }
+      const w=await romFileHandle.createWritable();
+      await w.write(bytes);await w.close();
+      flashSaved();return;
+    }catch(err){alert('Could not write directly, falling back to download.\n'+err.message);}
   }
   if(hasFSAccess){
     try{
       const handle=await window.showSaveFilePicker({
-        id:'apple2-rom-editor',
-        suggestedName:romFileName||'chargen.bin',
-        types:[{description:'Apple II Character ROM',accept:{'application/octet-stream':['.bin']}}]
+        id:'cbm-rom-editor',
+        suggestedName:romFileName||'cbm_font.bin',
+        types:[{description:'Commodore Character ROM',accept:{'application/octet-stream':['.bin']}}]
       });
-      const writable=await handle.createWritable();
-      await writable.write(bytes);
-      await writable.close();
-      romFileHandle=handle;
-      romFileName=handle.name;
-      flashSaved();
-      return;
-    }catch(err){
-      if(err.name==='AbortError')return;
-    }
+      const w=await handle.createWritable();
+      await w.write(bytes);await w.close();
+      romFileHandle=handle;romFileName=handle.name;
+      flashSaved();return;
+    }catch(err){if(err.name==='AbortError')return;}
   }
-  downloadBytes(romFileName||'chargen.bin',bytes);
+  downloadBytes(romFileName||'cbm_font.bin',bytes);
 }
 
 function flashSaved(){
   const s=document.getElementById('copystat');
-  s.textContent='Saved!';
-  s.classList.add('show');
+  s.textContent='Saved!';s.classList.add('show');
   setTimeout(()=>{s.classList.remove('show');s.textContent='Copied!';},1500);
 }
 
 function downloadBytes(name,bytes){
   const blob=new Blob([bytes],{type:'application/octet-stream'});
-  const link=document.createElement('a');
-  link.download=name;
-  link.href=URL.createObjectURL(blob);
-  link.click();
-  URL.revokeObjectURL(link.href);
+  const a=document.createElement('a');
+  a.download=name;a.href=URL.createObjectURL(blob);a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function download(name,content){
   const blob=new Blob([content],{type:'text/plain'});
-  const link=document.createElement('a');
-  link.download=name;
-  link.href=URL.createObjectURL(blob);
-  link.click();
-  URL.revokeObjectURL(link.href);
+  const a=document.createElement('a');
+  a.download=name;a.href=URL.createObjectURL(blob);a.click();
+  URL.revokeObjectURL(a.href);
 }
 
-function rowToBitmap(addr,r){
-  let s='';
-  for(let c=0;c<fmtWidth;c++)s+=getPixel(curBlock,addr,r,c)?'#':'.';
-  return s;
+function exportBlock(){
+  const start=curBlock*BLOCK_SIZE;
+  const bytes=romBytes.slice(start,start+BLOCK_SIZE);
+  const base=(romFileName||'font').replace(/\.[^.]+$/,'');
+  downloadBytes(`${base}_set${curBlock}.bin`,bytes);
+}
+
+async function importBlock(){
+  if(hasFSAccess){
+    let handle;
+    try{
+      [handle]=await window.showOpenFilePicker({
+        id:'cbm-rom-editor-import',
+        types:[{description:'Commodore Character Set',accept:{'application/octet-stream':['.bin','.rom']}}]
+      });
+    }catch(err){return;}
+    try{
+      const file=await handle.getFile();
+      const buf=await file.arrayBuffer();
+      applyBlockImport(new Uint8Array(buf));
+    }catch(err){alert('Failed to read font file: '+err.message);}
+  }else{
+    document.getElementById('blockfileinput').click();
+  }
+}
+
+function handleBlockFileInputFallback(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>applyBlockImport(new Uint8Array(ev.target.result));
+  reader.readAsArrayBuffer(file);
+  e.target.value='';
+}
+
+function applyBlockImport(bytes){
+  if(bytes.length!==BLOCK_SIZE){
+    alert(`Expected exactly ${BLOCK_SIZE} bytes (one 2KB character set). Selected file is ${bytes.length} bytes. Import cancelled.`);
+    return;
+  }
+  romBytes.set(bytes,curBlock*BLOCK_SIZE);
+  undoStack=[];
+  buildCharMap();
+  selectChar(sel);
+  renderPreview();
+  updateStatus();
 }
 
 function exportC(){
-  let out=`// Apple II character ROM dump: ${romFileName||'(unsaved)'}\n`;
-  out+=`// ${romBytes.length} bytes, ${numBlocks} set(s) of $0800 bytes, 256 chars x 8 bytes each\n`;
-  out+=`// Bit format: shift=${fmtShift} width=${fmtWidth} mirror=${fmtMirror} invert=${fmtInvert} (block ${curBlock} shown in comments)\n\n`;
+  let out=`// Commodore character ROM: ${romFileName||'(unsaved)'}\n`;
+  out+=`// ${romBytes.length} bytes, ${numBlocks} set(s) of $0800 bytes, ${NUM_CHARS} chars x ${CHAR_ROWS} bytes each\n`;
+  out+=`// Format: shift=0 width=8 MSB-first invert=${fmtInvert} (set ${curBlock} shown in comments)\n\n`;
   out+='unsigned char rom_data[] = {\n';
-  for(let addr=0;addr<256;addr++){
+  for(let addr=0;addr<NUM_CHARS;addr++){
     const off=charOffset(curBlock,addr);
-    out+=`/* $${addr.toString(16).toUpperCase().padStart(2,'0')}\n`;
-    for(let r=0;r<ROWS;r++)out+='   '+rowToBitmap(addr,r)+'\n';
-    out+='*/\n';
-    const bytes=[];
-    for(let r=0;r<ROWS;r++)bytes.push(romBytes[off+r]||0);
-    out+='        '+bytes.map(v=>'0x'+v.toString(16).padStart(2,'0').toUpperCase()).join(', ')+',\n';
+    out+=`  /* $${addr.toString(16).toUpperCase().padStart(2,'0')}\n`;
+    for(let r=0;r<CHAR_ROWS;r++){
+      let bits='';
+      for(let c=0;c<FMT_WIDTH;c++)bits+=getPixel(curBlock,addr,r,c)?'#':'.';
+      out+='     '+bits+'\n';
+    }
+    out+='  */\n';
+    const bvals=[];
+    for(let r=0;r<CHAR_ROWS;r++)bvals.push(romBytes[off+r]||0);
+    out+='  '+bvals.map(v=>'0x'+v.toString(16).padStart(2,'0').toUpperCase()).join(', ')+',\n';
   }
   out+='};\n';
   download('rom_dump.c',out);
@@ -633,8 +689,8 @@ function exportC(){
 
 function exportPNG(){
   const scale=3;
-  const cols=16,rows=16;
-  const cw=fmtWidth*scale,ch=ROWS*scale;
+  const cols=16, rows=Math.ceil(NUM_CHARS/16);
+  const cw=FMT_WIDTH*scale, ch=CHAR_ROWS*scale;
   const labelH=10;
   const cv=document.createElement('canvas');
   cv.width=cols*(cw+1)+1;
@@ -642,40 +698,31 @@ function exportPNG(){
   const ctx=cv.getContext('2d');
   ctx.fillStyle='#1e1e1e';
   ctx.fillRect(0,0,cv.width,cv.height);
-  for(let addr=0;addr<256;addr++){
-    const col=addr%cols,row=Math.floor(addr/cols);
-    const ox=col*(cw+1)+1,oy=row*(ch+labelH+1)+1+labelH;
+  for(let addr=0;addr<NUM_CHARS;addr++){
+    const col=addr%cols, row=Math.floor(addr/cols);
+    const ox=col*(cw+1)+1, oy=row*(ch+labelH+1)+1+labelH;
     ctx.strokeStyle='#333';
     ctx.strokeRect(ox-1,oy-labelH-1,cw+1,ch+labelH+1);
     ctx.fillStyle='#888';
     ctx.font='8px monospace';
     ctx.fillText('$'+addr.toString(16).toUpperCase().padStart(2,'0'),ox,oy-2);
     ctx.fillStyle='#4ec9b0';
-    for(let r=0;r<ROWS;r++){
-      for(let c=0;c<fmtWidth;c++){
+    for(let r=0;r<CHAR_ROWS;r++)
+      for(let c=0;c<FMT_WIDTH;c++)
         if(getPixel(curBlock,addr,r,c))ctx.fillRect(ox+c*scale,oy+r*scale,scale,scale);
-      }
-    }
   }
-  const link=document.createElement('a');
-  link.download='rom_charset_block'+curBlock+'.png';
-  link.href=cv.toDataURL('image/png');
-  link.click();
+  const a=document.createElement('a');
+  a.download='rom_charset_set'+curBlock+'.png';
+  a.href=cv.toDataURL('image/png');
+  a.click();
 }
 
 document.addEventListener('keydown',(e)=>{
-  if(e.ctrlKey&&e.key==='c'&&document.activeElement.tagName!=='TEXTAREA'&&document.activeElement.tagName!=='INPUT'){
-    e.preventDefault();
-    copyGlyph();
-  }
-  if(e.ctrlKey&&e.key==='v'&&document.activeElement.tagName!=='TEXTAREA'&&document.activeElement.tagName!=='INPUT'){
-    e.preventDefault();
-    pasteGlyph();
-  }
-  if(e.ctrlKey&&e.key==='z'&&document.activeElement.tagName!=='TEXTAREA'&&document.activeElement.tagName!=='INPUT'){
-    e.preventDefault();
-    undo();
-  }
+  const tag=document.activeElement.tagName;
+  if(tag==='TEXTAREA'||tag==='INPUT')return;
+  if(e.ctrlKey&&e.key==='c'){e.preventDefault();copyGlyph();}
+  if(e.ctrlKey&&e.key==='v'){e.preventDefault();pasteGlyph();}
+  if(e.ctrlKey&&e.key==='z'){e.preventDefault();undo();}
 });
 
 init();
