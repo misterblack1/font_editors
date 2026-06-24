@@ -12,8 +12,9 @@ These tools to help you edit font ROMs. They run entirely in your browser. You c
 
 [TRS-80 Font Editor](https://htmlpreview.github.io/?https://github.com/misterblack1/font_editors/blob/main/editors/TRS80.html)
 
+Notes: Apple II character generators are a bit all over the place, you may need to push invert and/or mirror to get them to look correct in the editor. This is just how the hardware work on the Apple II. For other systems, like IBM (CGA/MDA) or TRS-80, you may need to change the mode depending on the font. The editor does not try to guess the system type. 
 
-They look like this when running:
+Screenshots:
 ![Apple II Editor](/editors/previews/apple_II.png)
 
 ![IBM CGA/MDA Editor](/editors/previews/ibm_editor_preview.png)
