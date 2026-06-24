@@ -6,7 +6,7 @@ I created these tools to help me edit font ROMs as I couldn't find a good tool. 
 
 [IBM CGA/MDA Font Editor](https://htmlpreview.github.io/?https://github.com/misterblack1/font_editors/blob/main/editors/IBM_CGA_MDA.html)
 
-![Apple II Editor](/editors/previews/apple_II.png?raw=true)
+![Apple II Editor](/editors/previews/apple_II.png)
 
 ![IBM CGA/MDA Editor](/editors/previews/ibm_editor_preview.png)
 
