@@ -79,6 +79,7 @@ button.block.cur{background:#0e639c}
     <select id="modelSel" style="width:100%;background:#1e1e1e;color:#d4d4d4;border:1px solid #3e3e3e;font-size:11px;padding:3px" onchange="onModelChange()">
       <option value="std">Standard (Model I / III / 4)</option>
       <option value="m2">Model II / DT1 (stride-16, 128 chars)</option>
+      <option value="coco">CoCo External Font ROM (Stride-16, 128 chars)</option>
     </select>
     <h3>ROM Format</h3>
     <div id="fileinfo">No file loaded (blank buffer)</div>
@@ -111,6 +112,7 @@ button.block.cur{background:#0e639c}
     <div class="note">
       <p>Model I (1K): 128 chars, 8 bytes each, 5 bits wide (bits 4-0). Model III/4 (2K): 256 chars, 8 bytes each, 8 bits wide. Both use direct ASCII addressing ($20=space, $41=A).</p>
       <p>Model II: 128 chars, stride-16 (16 bytes/char), 8 bits wide, 10 active rows. DT1 also uses stride-16 but with fewer active rows; adjust Height to match.</p>
+      <p>CoCo External Font ROM: 128 chars, stride-16, 8 bits wide, 12 active rows.</p>
       <p>1K files are padded to 2K for editing. Save writes 1K unless any upper-128 chars are changed, which triggers a 2K save.</p>
     </div>
   </div>
@@ -235,6 +237,9 @@ function onModelChange(){
   if(modelType==='std'){
     CHAR_STRIDE=8; NUM_CHARS=256;
     fmtShift=0; fmtWidth=8; fmtRows=8; fmtMirror=false; fmtInvert=false;
+  }else if(modelType==='coco'){
+    CHAR_STRIDE=16; NUM_CHARS=128;
+    fmtShift=0; fmtWidth=8; fmtRows=12; fmtMirror=false; fmtInvert=false;
   }else{
     CHAR_STRIDE=16; NUM_CHARS=128;
     fmtShift=0; fmtWidth=8; fmtRows=10; fmtMirror=false; fmtInvert=false;
@@ -685,7 +690,8 @@ function rowToBitmap(addr,r){
 
 function exportC(){
   let out=`// TRS-80 character ROM: ${romFileName||'(unsaved)'}\n`;
-  out+=`// Model: ${modelType==='std'?'Standard':'Model II'}, stride=${CHAR_STRIDE}, chars=${NUM_CHARS}\n`;
+  const modelLabel=modelType==='std'?'Standard':(modelType==='coco'?'CoCo External Font':'Model II');
+  out+=`// Model: ${modelLabel}, stride=${CHAR_STRIDE}, chars=${NUM_CHARS}\n`;
   out+=`// Format: shift=${fmtShift} width=${fmtWidth} height=${fmtRows} mirror=${fmtMirror} invert=${fmtInvert} (block ${curBlock})\n\n`;
   out+='unsigned char rom_data[] = {\n';
   for(let addr=0;addr<NUM_CHARS;addr++){
