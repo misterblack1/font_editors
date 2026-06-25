@@ -10,7 +10,7 @@ These tools to help you edit font ROMs. They run entirely in your browser. You c
 
 [Commodore 64/128/PET/VIC-20 Font Editor](https://htmlpreview.github.io/?https://github.com/misterblack1/font_editors/blob/main/editors/Commodore.html)
 
-[TRS-80 Model 1/2/3/4/DTI + Coco External Font Editor](https://htmlpreview.github.io/?https://github.com/misterblack1/font_editors/blob/main/editors/TRS80.html)
+[TRS-80 Model 1/2/3/4/DTI + CoCo External Font Editor](https://htmlpreview.github.io/?https://github.com/misterblack1/font_editors/blob/main/editors/TRS80.html)
 
 Notes: Apple II character generators are a bit all over the place, you may need to push invert and/or mirror to get them to look correct in the editor. This is just how the hardware work on the Apple II. For other systems, like IBM (CGA/MDA) or TRS-80, you may need to change the mode depending on the font. The editor does not try to guess the system type. 
 
